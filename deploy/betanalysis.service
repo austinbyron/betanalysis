@@ -1,0 +1,17 @@
+[Unit]
+Description=betanalysis paper trading daemon
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homelab
+WorkingDirectory=/home/homelab/betanalysis
+EnvironmentFile=/home/homelab/betanalysis/.env
+ExecStart=/home/homelab/betanalysis/daemon
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

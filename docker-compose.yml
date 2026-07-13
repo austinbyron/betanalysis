@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: betanalysis-postgres
+    environment:
+      POSTGRES_DB: betanalysis
+      POSTGRES_USER: betuser
+      POSTGRES_PASSWORD: betpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Migrations run in filename order on first boot of an empty data dir.
+      # For an existing database, apply new files manually:
+      #   docker exec -i betanalysis-postgres psql -U betuser -d betanalysis < migrations/00X_....sql
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U betuser -d betanalysis"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  daemon:
+    build: .
+    container_name: betanalysis-daemon
+    environment:
+      ODDS_API_KEY: "${ODDS_API_KEY}"
+      BETANALYSIS_DATABASE_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

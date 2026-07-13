@@ -1,0 +1,6 @@
+{
+  "_comment": "Example seed file for `betanalysis seed-priors`. Keys are team names EXACTLY as The Odds API spells them; values are projected season wins (Vegas preseason win totals). Delete this _comment key or copy the file before seeding — every key is treated as a team. NFL: --season-games 17, MLB: --season-games 162.",
+  "Kansas City Chiefs": 11.5,
+  "Buffalo Bills": 11.5,
+  "Carolina Panthers": 5.5
+}

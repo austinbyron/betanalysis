@@ -1,0 +1,95 @@
+# Pi production config — free tier (500 credits/mo), three sports.
+# Measured costs (x-requests-last, 2026-07-09): odds collect = 3 credits
+# per sport (3 markets x 1 region); scores with daysFrom = 2 credits.
+# Budget: MLB 2x3 + scores 1x(3 sports x 2) + NFL 3 days/wk x3 + NCAAF
+# 2 days/wk x3 ≈ 14.2/day ≈ 425/month. When MLB ends (~Nov 1), remove
+# baseball_mlb here to free ~8/day for NFL Saturday slates (weeks 13-18).
+
+database:
+  host: localhost
+  port: 5432
+  name: betanalysis
+  user: betuser
+  password: betpass
+  ssl_mode: disable
+
+odds_api:
+  regions: us
+  default_sport: baseball_mlb
+
+trading:
+  initial_bankroll: 1000.0
+  min_stake: 1.0
+  max_stake_fraction: 0.05
+  kelly_fraction: 0.5
+  min_odds: 1.5
+  min_expected_value: 0.05
+
+analysis:
+  model_type: thompson # legacy single-model key, ignored while models is set
+  market_weight: 0.7
+  # Model race: every contender trades the same collected odds with its own
+  # paper portfolio. thompson-pitcher keeps the original default portfolio.
+  # Every contender is sport-scoped — an unpinned contender would bet every
+  # collected sport with one bankroll.
+  models:
+    - name: thompson-pitcher
+      model_type: thompson
+      adjusters: [mlb_pitcher]
+      portfolio: default
+      sports: [baseball_mlb]
+    - name: thompson-raw
+      model_type: thompson
+      sports: [baseball_mlb]
+    - name: historical-pitcher
+      model_type: historical
+      adjusters: [mlb_pitcher]
+      sports: [baseball_mlb]
+    - name: epsilon-pitcher
+      model_type: epsilon_greedy
+      adjusters: [mlb_pitcher]
+      sports: [baseball_mlb]
+    - name: elo-pitcher
+      model_type: elo
+      adjusters: [mlb_pitcher]
+      sports: [baseball_mlb]
+    # Fall football races — palette slots 6-9, fresh $1000 portfolios
+    # auto-created on first cycle. No adjusters: mlb_pitcher is MLB-only.
+    # NFL priors seeded live 2026-07-08; NCAAF auto-seeds at first restart.
+    - name: elo-nfl
+      model_type: elo
+      sports: [americanfootball_nfl]
+    - name: thompson-nfl
+      model_type: thompson
+      sports: [americanfootball_nfl]
+    - name: elo-ncaaf
+      model_type: elo
+      sports: [americanfootball_ncaaf]
+    - name: thompson-ncaaf
+      model_type: thompson
+      sports: [americanfootball_ncaaf]
+
+scheduler:
+  enabled: true
+  timezone: America/New_York
+  collect_crons:
+    # Two MLB snapshots: before the 1PM day-game slate and evening slate
+    baseball_mlb: "0 12,18 * * *"
+    # Football lines once per game-day morning (free-tier austerity —
+    # the mid-Aug tier decision may relax these)
+    americanfootball_nfl: "0 10 * * 0,1,4"   # Sun, Mon, Thu
+    americanfootball_ncaaf: "0 9 * * 5,6"    # Fri, Sat
+  # Scores once nightly before the 23:30 settle; daysFrom=3 catches
+  # everything, and each pull costs 2 credits x 3 sports
+  stats_cron: "15 23 * * *"
+
+server:
+  enabled: true
+  port: 8090
+
+sports:
+  - baseball_mlb
+  - americanfootball_nfl
+  - americanfootball_ncaaf
+  # Winter candidates (each needs a collect_crons entry sized to the API
+  # tier): basketball_nba, basketball_ncaab

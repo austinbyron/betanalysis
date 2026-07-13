@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="refresh" content="300">
+<title>betanalysis</title>
+<style>
+  /* Always dark — the dashboard has one theme regardless of OS setting. */
+  :root {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface:        #1a1a19;
+    --ink:            #ffffff;
+    --ink-secondary:  #c3c2b7;
+    --ink-muted:      #898781;
+    --grid:           #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #199e70;
+    --series-3:       #c98500;
+    --series-4:       #008300;
+    --series-5:       #9085e9;
+    --series-6:       #e66767;
+    --series-7:       #00a3c4;
+    --series-8:       #d55181;
+    --series-9:       #d95926;
+    --delta-good:     #0ca30c;
+    --delta-bad:      #d03b3b;
+    --preview:        #c98500;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--ink);
+    padding: 24px;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  /* Leaderboard and bankroll chart share the top row on wide screens */
+  .top-grid { display: grid; grid-template-columns: 1fr; gap: 0 20px; align-items: start; }
+  @media (min-width: 1100px) {
+    .top-grid { grid-template-columns: minmax(420px, 2fr) 3fr; }
+    .top-grid > section { margin-bottom: 28px; }
+  }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .filter-chip {
+    font: inherit; font-size: 12.5px; color: var(--ink-secondary);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .filter-chip.active { color: var(--ink); border-color: var(--ink-muted); font-weight: 600; }
+  tr.filtered-out { display: none; }
+  tr.dimmed td { opacity: 0.35; }
+  th[data-sortable] { cursor: pointer; user-select: none; }
+  th[data-sortable]:hover { color: var(--ink); }
+  th .sort-arrow { font-size: 10px; margin-left: 3px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; font-weight: 650; }
+  header .meta { color: var(--ink-muted); font-size: 13px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .tile .label { font-size: 12px; color: var(--ink-secondary); margin-bottom: 6px; }
+  .tile .value { font-size: 24px; font-weight: 650; }
+  .tile .sub { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
+  .good { color: var(--delta-good); }
+  .bad  { color: var(--delta-bad); }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 15px; font-weight: 650; margin-bottom: 10px; }
+  h2 .hint { font-weight: 400; font-size: 12px; color: var(--ink-muted); margin-left: 8px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--ink-secondary); font-weight: 550; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pick { font-weight: 600; }
+  td a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--baseline);
+    text-underline-offset: 3px;
+  }
+  td a:hover { text-decoration-color: var(--ink); }
+  .badge {
+    font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--ink-secondary);
+    white-space: nowrap;
+  }
+  .badge-preview { color: var(--preview); border-color: var(--preview); }
+  .result-won  { color: var(--delta-good); font-weight: 600; }
+  .result-lost { color: var(--delta-bad);  font-weight: 600; }
+  .empty { color: var(--ink-muted); font-size: 13.5px; padding: 6px 0; }
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { width: 100%; height: auto; display: block; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 8px; font-size: 12px; color: var(--ink);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    white-space: nowrap; transform: translate(-50%, -130%);
+  }
+  .legend { display: flex; gap: 16px; padding: 8px 12px 0; font-size: 12px; color: var(--ink-secondary); flex-wrap: wrap; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .chip { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .strong-consensus td { background: color-mix(in srgb, var(--delta-good) 8%, transparent); }
+  .badge-strong { color: var(--delta-good); border: 1px solid var(--delta-good); border-radius: 4px; padding: 0 4px; font-size: 11px; }
+  footer { color: var(--ink-muted); font-size: 12px; margin-top: 8px; }
+  /* Phones: tables restack into cards — one card per row, labeled values in
+     a two-column grid, matchup cells spanning the full width. */
+  @media (max-width: 640px) {
+    body { padding: 12px; }
+    header { margin-bottom: 12px; }
+    section { margin-bottom: 18px; }
+    .card { padding: 12px; border-radius: 8px; }
+    .legend { gap: 10px; }
+
+    .filters {
+      flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+      margin-left: -12px; margin-right: -12px; padding: 0 12px 4px;
+    }
+    .filter-chip { flex: 0 0 auto; padding: 7px 14px; }
+
+    .table-wrap { overflow-x: visible; }
+    table, tbody { display: block; width: 100%; }
+    thead { display: none; }
+    tbody tr {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 16px; padding: 12px 2px;
+      border-bottom: 1px solid var(--grid);
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td, tbody td.num {
+      display: block; padding: 0; border: none;
+      white-space: normal; text-align: left; font-size: 13.5px;
+    }
+    tbody td::before {
+      content: attr(data-th); display: block;
+      font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--ink-muted); margin-bottom: 2px;
+    }
+    tbody td:not([data-th])::before, tbody td[data-th=""]::before { display: none; }
+    tbody td.cell-wide { grid-column: 1 / -1; }
+    tbody td:empty { display: none; }
+    tr.filtered-out { display: none; }
+
+    /* Chart stays legible: scroll it sideways instead of shrinking it.
+       min-width: 0 on the grid items stops the chart's fixed min-width
+       from propagating into the track and blowing the layout past the
+       viewport — grid items refuse to shrink below content otherwise. */
+    .top-grid > section, .top-grid > div { min-width: 0; }
+    .chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .chart-wrap svg { min-width: 640px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>betanalysis</h1>
+  <span class="meta">paper trading · {{ len .Models }} models · {{ .GeneratedAt.Format "Jan 2 15:04" }}</span>
+</header>
+
+{{ if gt (len .Models) 1 }}
+<div class="filters" id="model-filter" role="group" aria-label="Filter tables by model">
+  <button class="filter-chip active" data-model="all">All models</button>
+  {{ range $i, $m := .Models }}
+  <button class="filter-chip" data-model="{{ $m }}"><span class="chip" style="background: var(--series-{{ inc $i }})"></span>{{ $m }}</button>
+  {{ end }}
+</div>
+{{ end }}
+
+<div class="top-grid">
+{{ if .Leaderboard }}
+<section>
+  <h2>Leaderboard</h2>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>Model</th><th class="num">Balance</th><th class="num">P/L</th>
+        <th class="num">ROI</th><th class="num">Record</th><th class="num">Win rate</th><th class="num">Pending</th>
+      </tr></thead>
+      <tbody>
+      {{ range .Leaderboard }}
+      <tr data-model="{{ .Name }}" data-dim-only>
+        <td class="pick cell-wide">{{ .Name }}</td>
+        <td class="num" data-th="Balance">{{ money .Portfolio.Balance }}</td>
+        <td class="num {{ if .ProfitPositive }}good{{ else }}bad{{ end }}" data-th="P/L">{{ signed .Portfolio.TotalProfitLoss }}</td>
+        <td class="num" data-th="ROI">{{ pct .Portfolio.ROI }}</td>
+        <td class="num" data-th="Record">{{ .Portfolio.BetsWon }}–{{ .Portfolio.BetsLost }}</td>
+        <td class="num" data-th="Win rate">{{ pct .Portfolio.WinRate }}</td>
+        <td class="num" data-th="Pending">{{ .Portfolio.ActiveBetsCount }} / {{ money .Portfolio.ActiveBetsValue }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{ else }}
+<div class="card"><div class="empty">No portfolio yet — it's created on the first trading cycle.</div></div>
+{{ end }}
+
+{{ if .Equity }}
+<section>
+  <h2>Bankroll</h2>
+  <div class="card">
+    <div class="legend">
+      {{ range .Equity.Series }}
+      <span class="legend-item"><span class="chip" style="background: var(--series-{{ .Slot }})"></span>{{ .Name }}</span>
+      {{ end }}
+    </div>
+    <div class="chart-wrap" id="equity">
+      <svg viewBox="0 0 {{ .Equity.Width }} {{ .Equity.Height }}" role="img" aria-label="Bankroll over time per model">
+        {{ range .Equity.Grid }}
+        <line x1="56" x2="{{ $.Equity.Width }}" y1="{{ .Y }}" y2="{{ .Y }}" stroke="var(--grid)" stroke-width="1"/>
+        <text x="48" y="{{ .Y }}" dy="4" text-anchor="end" font-size="11" fill="var(--ink-muted)">{{ .Label }}</text>
+        {{ end }}
+        <line x1="56" x2="{{ .Equity.Width }}" y1="{{ .Equity.BaselineY }}" y2="{{ .Equity.BaselineY }}"
+              stroke="var(--baseline)" stroke-width="1" stroke-dasharray="4 4"/>
+        {{ range .Equity.Series }}
+        <path d="{{ .Path }}" fill="none" stroke="var(--series-{{ .Slot }})" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round"/>
+        {{ end }}
+        {{ range .Equity.Series }}{{ $slot := .Slot }}
+        {{ range .Points }}
+        <circle class="pt" cx="{{ .X }}" cy="{{ .Y }}" r="3.5" fill="var(--series-{{ $slot }})"
+                stroke="var(--surface)" stroke-width="2" data-label="{{ .Label }}"/>
+        {{ end }}
+        <text x="{{ .EndX }}" y="{{ .EndY }}" dx="8" dy="4" font-size="11" fill="var(--ink-secondary)">{{ .Name }}</text>
+        {{ end }}
+        <line id="crosshair" y1="14" y2="{{ .Equity.Height }}" stroke="var(--baseline)" stroke-width="1" visibility="hidden"/>
+      </svg>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+  </div>
+</section>
+{{ end }}
+</div>
+
+{{ if .Consensus }}
+<section>
+  <h2>Consensus picks <span class="hint">models that agree — the real-money shortlist. Informational only.</span></h2>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>Game</th><th>Starts</th><th>Pick</th><th class="num">Agreement</th>
+        <th class="num">Avg prob</th><th class="num">Min EV</th><th class="num">Best odds</th>
+      </tr></thead>
+      <tbody>
+      {{ range .Consensus }}
+      <tr {{ if .Strong }}class="strong-consensus"{{ end }}>
+        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</a>{{ else }}{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}{{ end }}</td>
+        <td data-th="Starts">{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}</td>
+        <td class="pick" data-th="Pick">{{ if eq .Selection "home" }}{{ .Game.HomeTeam }}{{ else }}{{ .Game.AwayTeam }}{{ end }} ML
+            {{ if .Strong }}<span class="badge-strong">strong</span>{{ end }}</td>
+        <td class="num" data-th="Agreement">{{ .Votes }}/{{ .Total }}</td>
+        <td class="num" data-th="Avg prob">{{ prob .AvgProb }}</td>
+        <td class="num good" data-th="Min EV">{{ signed .MinEV }}</td>
+        <td class="num" data-th="Best odds">{{ odds .BestOdds }} <span class="hint">{{ .BestBook }}</span></td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{ end }}
+
+<section>
+  <h2>Recommendations <span class="hint">what each model would bet right now — refreshed each page load</span></h2>
+  <div class="card table-wrap">
+    {{ if .Recommendations }}
+    <table>
+      <thead><tr>
+        <th>Model</th><th>Game</th><th>Starts</th><th>Pick</th><th>Book</th>
+        <th class="num">Odds</th><th class="num">Model prob</th><th class="num">EV</th><th class="num">Stake</th><th></th>
+      </tr></thead>
+      <tbody>
+      {{ range .Recommendations }}
+      <tr data-model="{{ .Model }}">
+        <td class="pick" data-th="Model">{{ .Model }}</td>
+        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</a>{{ else }}{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}{{ end }}</td>
+        <td data-th="Starts">{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}</td>
+        <td class="pick" data-th="Pick">{{ if eq .Bet.Selection "home" }}{{ .Game.HomeTeam }}{{ else }}{{ .Game.AwayTeam }}{{ end }} ML</td>
+        <td data-th="Book">{{ .Bet.Bookmaker }} <span class="hint">{{ .OddsAge }}</span></td>
+        <td class="num" data-th="Odds">{{ odds .Bet.Odds }}</td>
+        <td class="num" data-th="Model prob">{{ prob .Bet.Probability }}</td>
+        <td class="num good" data-th="EV">{{ signed .Bet.ExpectedValue }}</td>
+        <td class="num" data-th="Stake">{{ money .Stake }}</td>
+        <td>{{ if .AlreadyBet }}<span class="badge">placed</span>{{ end }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <div class="empty">No positive-EV opportunities right now. The trading cycle runs every 30 minutes.</div>
+    {{ end }}
+  </div>
+</section>
+
+{{ if or .Previews .Shadow }}
+<section>
+  <h2>Warmup preview <span class="hint">what the models would bet at full confidence — recorded at cycle time, settled for score, no money moves</span></h2>
+  {{ if .Shadow }}
+  <div class="card table-wrap" style="margin-bottom: 12px;">
+    <table>
+      <thead><tr>
+        <th>Model</th><th class="num">Shadow record</th><th class="num">Would-be P/L</th><th class="num">Pending</th>
+      </tr></thead>
+      <tbody>
+      {{ range .Shadow }}
+      <tr data-model="{{ .Model }}" data-dim-only>
+        <td class="pick" data-th="Model">{{ .Model }}</td>
+        <td class="num" data-th="Shadow record">{{ .Won }}–{{ .Lost }}</td>
+        <td class="num {{ if .ProfitPositive }}good{{ else }}bad{{ end }}" data-th="Would-be P/L">{{ signed .Profit }}</td>
+        <td class="num" data-th="Pending">{{ .Pending }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ end }}
+  {{ if .Previews }}
+  <div class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>Model</th><th>Game</th><th>Starts</th><th>Pick</th><th>Book</th>
+        <th class="num">Odds</th><th class="num">Model prob</th><th class="num">EV</th><th class="num">Would stake</th><th></th>
+      </tr></thead>
+      <tbody>
+      {{ range .Previews }}
+      <tr data-model="{{ .P.ModelID }}">
+        <td class="pick" data-th="Model">{{ .P.ModelID }}</td>
+        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td data-th="Starts">{{ if .Game }}{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}{{ end }}</td>
+        <td class="pick" data-th="Pick">{{ .Pick }} ML</td>
+        <td data-th="Book">{{ .P.Bookmaker }}</td>
+        <td class="num" data-th="Odds">{{ odds .P.Odds }}</td>
+        <td class="num" data-th="Model prob">{{ prob .P.Probability }}</td>
+        <td class="num good" data-th="EV">{{ signed .P.ExpectedValue }}</td>
+        <td class="num" data-th="Would stake">{{ money .P.Stake }}</td>
+        <td><span class="badge badge-preview">not placed · {{ prob .P.Confidence }} conf</span></td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+  {{ end }}
+</section>
+{{ end }}
+
+<section>
+  <h2>Active bets</h2>
+  <div class="card table-wrap">
+    {{ if .ActiveBets }}
+    <table>
+      <thead><tr>
+        <th>Model</th><th>Game</th><th>Starts</th><th>Pick</th><th>Book</th>
+        <th class="num">Odds</th><th class="num">Stake</th><th class="num">To win</th><th class="num">Model prob</th>
+      </tr></thead>
+      <tbody>
+      {{ range .ActiveBets }}
+      <tr data-model="{{ .Bet.ModelID }}">
+        <td class="pick" data-th="Model">{{ .Bet.ModelID }}</td>
+        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td data-th="Starts">{{ if .Game }}{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}{{ end }}</td>
+        <td class="pick" data-th="Pick">{{ title .Bet.Selection }} ML</td>
+        <td data-th="Book">{{ .Bet.Bookmaker }}</td>
+        <td class="num" data-th="Odds">{{ odds .Bet.Odds }}</td>
+        <td class="num" data-th="Stake">{{ money .Bet.Stake }}</td>
+        <td class="num" data-th="To win">{{ money .Bet.PotentialWin }}</td>
+        <td class="num" data-th="Model prob">{{ prob .Bet.Probability }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <div class="empty">No open positions.</div>
+    {{ end }}
+  </div>
+</section>
+
+<section>
+  <h2>Recent results</h2>
+  <div class="card table-wrap">
+    {{ if .SettledBets }}
+    <table>
+      <thead><tr>
+        <th>Settled</th><th>Model</th><th>Game</th><th>Pick</th>
+        <th class="num">Odds</th><th class="num">Model prob</th><th class="num">Stake</th><th class="num">Profit</th><th>Result</th>
+      </tr></thead>
+      <tbody>
+      {{ range .SettledBets }}
+      <tr data-model="{{ .Bet.ModelID }}">
+        <td data-th="Settled">{{ if .Bet.SettledAt }}{{ .Bet.SettledAt.Local.Format "Jan 2" }}{{ end }}</td>
+        <td class="pick" data-th="Model">{{ .Bet.ModelID }}</td>
+        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td class="pick" data-th="Pick">{{ title .Bet.Selection }} ML</td>
+        <td class="num" data-th="Odds">{{ odds .Bet.Odds }}</td>
+        <td class="num" data-th="Model prob">{{ prob .Bet.Probability }}</td>
+        <td class="num" data-th="Stake">{{ money .Bet.Stake }}</td>
+        <td class="num {{ if .Won }}good{{ else }}bad{{ end }}" data-th="Profit">{{ signed .Bet.Profit }}</td>
+        <td data-th="Result">{{ if .Won }}<span class="result-won">Won ✓</span>{{ else }}<span class="result-lost">Lost ✕</span>{{ end }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <div class="empty">Nothing settled yet.</div>
+    {{ end }}
+  </div>
+</section>
+
+<footer>
+  Paper trading only — no real money. Sports: {{ range $i, $s := .Sports }}{{ if $i }}, {{ end }}{{ title $s }}{{ end }}.
+  Page refreshes every 5 minutes.
+  {{ if .Quota }}<br>Odds API credits: <span {{ if .QuotaLow }}class="bad"{{ end }}>{{ printf "%.0f" .Quota.RequestsRemaining }} remaining</span>
+  · {{ printf "%.0f" .Quota.RequestsUsed }} used · updated {{ .QuotaAge }}{{ end }}
+</footer>
+
+<script>
+(function () {
+  var wrap = document.getElementById("equity");
+  if (!wrap) return;
+  var svg = wrap.querySelector("svg");
+  var tooltip = document.getElementById("tooltip");
+  var crosshair = document.getElementById("crosshair");
+  var pts = Array.prototype.slice.call(svg.querySelectorAll(".pt"));
+  if (!pts.length) return;
+
+  // Pointer events cover mouse hover and touch taps alike
+  function showNearest(e) {
+    var rect = svg.getBoundingClientRect();
+    var scale = rect.width / svg.viewBox.baseVal.width;
+    var mouseX = (e.clientX - rect.left) / scale;
+
+    var nearest = pts[0], best = Infinity;
+    pts.forEach(function (p) {
+      var d = Math.abs(p.cx.baseVal.value - mouseX);
+      if (d < best) { best = d; nearest = p; }
+    });
+
+    crosshair.setAttribute("x1", nearest.cx.baseVal.value);
+    crosshair.setAttribute("x2", nearest.cx.baseVal.value);
+    crosshair.setAttribute("visibility", "visible");
+
+    tooltip.textContent = nearest.getAttribute("data-label");
+    tooltip.style.display = "block";
+    tooltip.style.left = (nearest.cx.baseVal.value * scale) + "px";
+    tooltip.style.top = (nearest.cy.baseVal.value * scale) + "px";
+  }
+  svg.addEventListener("pointermove", showNearest);
+  svg.addEventListener("pointerdown", showNearest);
+
+  svg.addEventListener("pointerleave", function () {
+    tooltip.style.display = "none";
+    crosshair.setAttribute("visibility", "hidden");
+  });
+})();
+
+// Sortable table headers: click toggles asc/desc; values parse as numbers
+// when they look like money/percent/odds, otherwise compare as text.
+function initTableSort() {
+  document.querySelectorAll("table").forEach(function (table) {
+    var headers = table.querySelectorAll("thead th");
+    headers.forEach(function (th, col) {
+      if (!th.textContent.trim()) return;
+      th.setAttribute("data-sortable", "");
+      th.addEventListener("click", function () {
+        var dir = th.getAttribute("data-dir") === "asc" ? "desc" : "asc";
+        headers.forEach(function (h) {
+          h.removeAttribute("data-dir");
+          var a = h.querySelector(".sort-arrow");
+          if (a) a.remove();
+        });
+        th.setAttribute("data-dir", dir);
+        var arrow = document.createElement("span");
+        arrow.className = "sort-arrow";
+        arrow.textContent = dir === "asc" ? "▲" : "▼";
+        th.appendChild(arrow);
+
+        var tbody = table.querySelector("tbody");
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+        var num = function (s) {
+          var v = parseFloat(s.replace(/[$,%+]/g, "").replace(/[–—]/g, "-"));
+          return isNaN(v) ? null : v;
+        };
+        rows.sort(function (ra, rb) {
+          var a = (ra.cells[col] || {}).textContent || "";
+          var b = (rb.cells[col] || {}).textContent || "";
+          a = a.trim(); b = b.trim();
+          var na = num(a), nb = num(b);
+          var cmp = na !== null && nb !== null ? na - nb : a.localeCompare(b);
+          return dir === "asc" ? cmp : -cmp;
+        });
+        rows.forEach(function (r) { tbody.appendChild(r); });
+      });
+    });
+  });
+}
+initTableSort();
+
+// Model filter chips: hide non-matching rows in bet tables, dim (never
+// hide) leaderboard rows. Choice survives the 5-minute auto-refresh.
+(function () {
+  var bar = document.getElementById("model-filter");
+  if (!bar) return;
+  var chips = Array.prototype.slice.call(bar.querySelectorAll(".filter-chip"));
+  var KEY = "betanalysis-model-filter";
+
+  function apply(model) {
+    chips.forEach(function (c) {
+      c.classList.toggle("active", c.getAttribute("data-model") === model);
+    });
+    document.querySelectorAll("tr[data-model]").forEach(function (row) {
+      var match = model === "all" || row.getAttribute("data-model") === model;
+      if (row.hasAttribute("data-dim-only")) {
+        row.classList.toggle("dimmed", !match);
+      } else {
+        row.classList.toggle("filtered-out", !match);
+      }
+    });
+  }
+
+  chips.forEach(function (c) {
+    c.addEventListener("click", function () {
+      var model = c.getAttribute("data-model");
+      try { localStorage.setItem(KEY, model); } catch (e) {}
+      apply(model);
+    });
+  });
+
+  var saved = "all";
+  try { saved = localStorage.getItem(KEY) || "all"; } catch (e) {}
+  if (!chips.some(function (c) { return c.getAttribute("data-model") === saved; })) saved = "all";
+  apply(saved);
+})();
+</script>
+
+</body>
+</html>
