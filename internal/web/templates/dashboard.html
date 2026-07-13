@@ -100,6 +100,7 @@
   .badge-preview { color: var(--preview); border-color: var(--preview); }
   .result-won  { color: var(--delta-good); font-weight: 600; }
   .result-lost { color: var(--delta-bad);  font-weight: 600; }
+  .result-void { color: var(--muted);      font-weight: 600; }
   .empty { color: var(--ink-muted); font-size: 13.5px; padding: 6px 0; }
   .chart-wrap { position: relative; }
   .chart-wrap svg { width: 100%; height: auto; display: block; }
@@ -408,8 +409,8 @@
         <td class="num" data-th="Odds">{{ odds .Bet.Odds }}</td>
         <td class="num" data-th="Model prob">{{ prob .Bet.Probability }}</td>
         <td class="num" data-th="Stake">{{ money .Bet.Stake }}</td>
-        <td class="num {{ if .Won }}good{{ else }}bad{{ end }}" data-th="Profit">{{ signed .Bet.Profit }}</td>
-        <td data-th="Result">{{ if .Won }}<span class="result-won">Won ✓</span>{{ else }}<span class="result-lost">Lost ✕</span>{{ end }}</td>
+        <td class="num {{ if .Void }}{{ else if .Won }}good{{ else }}bad{{ end }}" data-th="Profit">{{ signed .Bet.Profit }}</td>
+        <td data-th="Result">{{ if .Void }}<span class="result-void">Void ↩</span>{{ else if .Won }}<span class="result-won">Won ✓</span>{{ else }}<span class="result-lost">Lost ✕</span>{{ end }}</td>
       </tr>
       {{ end }}
       </tbody>

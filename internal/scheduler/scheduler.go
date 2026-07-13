@@ -7,6 +7,7 @@ import (
 	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/api"
 	"github.com/austinbyron/betanalysis/internal/config"
+	"github.com/austinbyron/betanalysis/internal/espn"
 	"github.com/austinbyron/betanalysis/internal/storage"
 	"github.com/austinbyron/betanalysis/internal/trading"
 	"github.com/robfig/cron/v3"
@@ -19,6 +20,7 @@ type Scheduler struct {
 	storage     *storage.PostgresDB
 	apiClient   *api.Client
 	teamService *analysis.TeamStatsService
+	reconciler  *trading.Reconciler
 	config      *config.Config
 	running     bool
 }
@@ -39,6 +41,7 @@ func NewScheduler(db *storage.PostgresDB, client *api.Client, cfg *config.Config
 		storage:     db,
 		apiClient:   client,
 		teamService: analysis.NewTeamStatsService(db, client),
+		reconciler:  trading.NewReconciler(db, espn.NewLinker()),
 		config:      cfg,
 	}
 }
@@ -178,6 +181,12 @@ func (s *Scheduler) settleBets() {
 	settler := trading.NewSettler(s.storage)
 	if err := settler.SettleBets(); err != nil {
 		log.Error().Err(err).Msg("Scheduled settlement failed")
+	}
+
+	// Heal bets whose odds-feed event vanished (reschedule id churn,
+	// postponements) — the scores path above can never settle those.
+	if err := s.reconciler.ReconcileStaleBets(); err != nil {
+		log.Error().Err(err).Msg("Stale-bet reconciliation failed")
 	}
 }
 

@@ -67,8 +67,7 @@ type AnalysisConfig struct {
 }
 
 // ModelConfig defines one contender in the model race: an estimator plus its
-// adjuster stack, portfolio, and optional overrides. See docs/superpowers/
-// specs/2026-07-07-model-race-design.md.
+// adjuster stack, portfolio, and optional overrides.
 type ModelConfig struct {
 	Name         string   `mapstructure:"name"`
 	ModelType    string   `mapstructure:"model_type"`

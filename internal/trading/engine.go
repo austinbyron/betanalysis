@@ -26,6 +26,8 @@ type Store interface {
 	RecordPreviewBet(pb types.PreviewBet) error
 	GetPendingPreviewBets() ([]types.PreviewBet, error)
 	SettlePreviewBet(pb types.PreviewBet) error
+	GetStaleScheduledGames(before time.Time) ([]types.Game, error)
+	UpdateGameScores(gameID string, homeScore, awayScore int, status string) error
 }
 
 // Engine handles paper trading operations
@@ -226,42 +228,16 @@ func (s *Settler) SettleBets() error {
 			continue
 		}
 
-		won := selectionWon(bet.Selection, game)
-
-		var payout float64
-		if won {
-			payout = bet.Stake + bet.PotentialWin
-			bet.Status = types.BetStatusWon
-		} else {
-			payout = 0
-			bet.Status = types.BetStatusLost
-		}
-
-		now := time.Now()
-		bet.ActualWin = &payout
-		bet.SettledAt = &now
-
-		delta := types.PortfolioDelta{
-			Balance:         payout,
-			TotalProfitLoss: payout - bet.Stake,
-			ActiveBetsCount: -1,
-			ActiveBetsValue: -bet.Stake,
-		}
-		if won {
-			delta.BetsWon = 1
-		} else {
-			delta.BetsLost = 1
-		}
-
-		if err := s.store.SettleBet(bet, delta); err != nil {
+		settledBet, err := settleAgainst(s.store, bet, game)
+		if err != nil {
 			log.Error().Err(err).Str("bet", bet.ID).Msg("Failed to settle bet")
 			continue
 		}
 
 		log.Info().
-			Str("bet", bet.ID).
-			Str("status", bet.Status).
-			Float64("payout", payout).
+			Str("bet", settledBet.ID).
+			Str("status", settledBet.Status).
+			Float64("payout", *settledBet.ActualWin).
 			Msg("Bet settled")
 
 		settled++
@@ -291,20 +267,7 @@ func (s *Settler) settlePreviews() error {
 			continue
 		}
 
-		var payout float64
-		if selectionWon(pb.Selection, game) {
-			payout = pb.Stake * pb.Odds
-			pb.Status = types.BetStatusWon
-		} else {
-			payout = 0
-			pb.Status = types.BetStatusLost
-		}
-
-		now := time.Now()
-		pb.Payout = &payout
-		pb.SettledAt = &now
-
-		if err := s.store.SettlePreviewBet(pb); err != nil {
+		if err := settlePreviewAgainst(s.store, pb, game); err != nil {
 			log.Error().Err(err).Str("preview", pb.ID).Msg("Failed to settle preview bet")
 			continue
 		}
@@ -315,6 +278,58 @@ func (s *Settler) settlePreviews() error {
 		log.Info().Int("settled", settled).Msg("Preview settlement complete")
 	}
 	return nil
+}
+
+// settleAgainst persists the outcome of one pending bet against a decided
+// game and applies the portfolio delta. Returns the settled bet.
+func settleAgainst(store Store, bet types.Bet, game *types.Game) (types.Bet, error) {
+	won := selectionWon(bet.Selection, game)
+
+	var payout float64
+	if won {
+		payout = bet.Stake + bet.PotentialWin
+		bet.Status = types.BetStatusWon
+	} else {
+		payout = 0
+		bet.Status = types.BetStatusLost
+	}
+
+	now := time.Now()
+	bet.ActualWin = &payout
+	bet.SettledAt = &now
+
+	delta := types.PortfolioDelta{
+		Balance:         payout,
+		TotalProfitLoss: payout - bet.Stake,
+		ActiveBetsCount: -1,
+		ActiveBetsValue: -bet.Stake,
+	}
+	if won {
+		delta.BetsWon = 1
+	} else {
+		delta.BetsLost = 1
+	}
+
+	return bet, store.SettleBet(bet, delta)
+}
+
+// settlePreviewAgainst resolves one pending preview against a decided
+// game. Previews move no money — just the shadow record's would-be payout.
+func settlePreviewAgainst(store Store, pb types.PreviewBet, game *types.Game) error {
+	var payout float64
+	if selectionWon(pb.Selection, game) {
+		payout = pb.Stake * pb.Odds
+		pb.Status = types.BetStatusWon
+	} else {
+		payout = 0
+		pb.Status = types.BetStatusLost
+	}
+
+	now := time.Now()
+	pb.Payout = &payout
+	pb.SettledAt = &now
+
+	return store.SettlePreviewBet(pb)
 }
 
 // selectionWon reports whether a moneyline selection won a finished game

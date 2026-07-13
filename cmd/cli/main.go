@@ -338,7 +338,14 @@ func runSettle(c *cli.Context) error {
 	defer db.Close()
 
 	settler := trading.NewSettler(db)
-	return settler.SettleBets()
+	if err := settler.SettleBets(); err != nil {
+		return err
+	}
+
+	// Heal bets whose odds-feed event vanished (reschedule id churn,
+	// postponements) — the scores path above can never settle those.
+	reconciler := trading.NewReconciler(db, espn.NewLinker())
+	return reconciler.ReconcileStaleBets()
 }
 
 // runSeedPriors seeds per-team Beta pseudo-counts. Default source is last

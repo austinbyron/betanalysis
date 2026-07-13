@@ -129,6 +129,30 @@ func (p *PostgresDB) GetFinishedGames(sportKey string, start, end time.Time) ([]
 	return games, nil
 }
 
+// GetStaleScheduledGames returns games still 'scheduled' past the given
+// cutoff that a pending bet or preview bet is waiting on — games the odds
+// feed abandoned (event id churn on reschedules, postponements).
+func (p *PostgresDB) GetStaleScheduledGames(before time.Time) ([]types.Game, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var games []types.Game
+	query := `
+		SELECT id, sport_key, commence_time, home_team, away_team, status, home_score, away_score, created_at, updated_at
+		FROM games g
+		WHERE g.status = 'scheduled' AND g.commence_time < $1
+			AND (EXISTS (SELECT 1 FROM bets b WHERE b.game_id = g.id AND b.status = 'pending')
+				OR EXISTS (SELECT 1 FROM preview_bets pb WHERE pb.game_id = g.id AND pb.status = 'pending'))
+		ORDER BY commence_time ASC
+	`
+
+	if err := p.db.SelectContext(ctx, &games, query, before); err != nil {
+		return nil, fmt.Errorf("failed to get stale scheduled games: %w", err)
+	}
+
+	return games, nil
+}
+
 // GetGameByID returns a game by its ID
 func (p *PostgresDB) GetGameByID(id string) (*types.Game, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -485,7 +509,7 @@ func (p *PostgresDB) GetSettledBets() ([]types.Bet, error) {
 		SELECT id, portfolio_id, game_id, selection, market_type, odds, stake,
 			potential_win, actual_win, status, expected_value, COALESCE(model_probability, 0) AS model_probability,
 			model_id, bookmaker, notes, settled_at, created_at, updated_at
-		FROM bets WHERE status IN ('won', 'lost') AND settled_at IS NOT NULL
+		FROM bets WHERE status IN ('won', 'lost', 'void') AND settled_at IS NOT NULL
 		ORDER BY settled_at ASC
 	`
 

@@ -259,6 +259,7 @@ type betRow struct {
 	GameURL string
 	Matchup string
 	Won     bool
+	Void    bool
 }
 
 type equityPoint struct {
@@ -426,9 +427,10 @@ func (s *Server) buildPreviews() ([]previewRow, []shadowRow) {
 			row = &shadowRow{Model: pb.ModelID}
 			byModel[pb.ModelID] = row
 		}
-		if pb.Status == types.BetStatusWon {
+		switch pb.Status {
+		case types.BetStatusWon:
 			row.Won++
-		} else {
+		case types.BetStatusLost:
 			row.Lost++
 		}
 		row.Profit += pb.Profit()
@@ -575,7 +577,7 @@ func (s *Server) buildBetRows() (active, settled []betRow) {
 }
 
 func (s *Server) toBetRow(bet types.Bet) betRow {
-	row := betRow{Bet: bet, Won: bet.Status == types.BetStatusWon}
+	row := betRow{Bet: bet, Won: bet.Status == types.BetStatusWon, Void: bet.Status == types.BetStatusVoid}
 	game, err := s.store.GetGameByID(bet.GameID)
 	if err == nil && game != nil {
 		row.Game = game
