@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="refresh" content="300">
+<title>betanalysis · {{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</title>
+{{ template "base-style" . }}
+<style>
+  .duel-legend span { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; font-size: 12.5px; color: var(--ink-secondary); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</h1>
+  <span class="meta">{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}</span>
+  <span class="meta"><a href="/analysis" style="color: inherit;">← analysis</a></span>
+  {{ if .GameURL }}<span class="meta"><a href="{{ .GameURL }}" target="_blank" rel="noopener" style="color: inherit;">ESPN ↗</a></span>{{ end }}
+</header>
+
+<section>
+  <h2>Odds <span class="hint">moneyline by book, de-vigged. Market median: {{ prob .MarketProb }} home</span></h2>
+  <div class="card table-wrap">
+    {{ if .Odds }}
+    <table>
+      <thead><tr><th>Book</th><th class="num">{{ .Game.HomeTeam }}</th><th class="num">Home prob</th><th class="num">{{ .Game.AwayTeam }}</th><th class="num">Away prob</th><th>Updated</th></tr></thead>
+      <tbody>
+      {{ range .Odds }}
+      <tr>
+        <td data-th="Book">{{ .Book }}</td>
+        <td class="num" data-th="Home">{{ odds .HomeOdds }}</td>
+        <td class="num" data-th="Home prob">{{ prob .HomeProb }}</td>
+        <td class="num" data-th="Away">{{ odds .AwayOdds }}</td>
+        <td class="num" data-th="Away prob">{{ prob .AwayProb }}</td>
+        <td data-th="Updated">{{ .Age }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <div class="empty">No current odds for this game.</div>
+    {{ end }}
+  </div>
+</section>
+
+{{ if .Duel }}
+<section id="beta-duel">
+  <h2>Beta posteriors <span class="hint">the Thompson arms — each curve is a team's win-rate posterior; wide means uncertain, and sampling from the overlap is why picks can flip</span></h2>
+  <div class="card">
+    <div class="duel-legend">
+      <span><span class="chip" style="background: var(--series-1)"></span>{{ .Duel.HomeLabel }}</span>
+      <span><span class="chip" style="background: var(--series-6)"></span>{{ .Duel.AwayLabel }}</span>
+    </div>
+    <div class="chart-wrap">
+      <svg viewBox="0 0 {{ .Duel.Width }} {{ .Duel.Height }}" role="img" aria-label="Team win-rate posteriors">
+        <path d="{{ .Duel.HomePath }}" fill="none" stroke="var(--series-1)" stroke-width="2"/>
+        <path d="{{ .Duel.AwayPath }}" fill="none" stroke="var(--series-6)" stroke-width="2"/>
+        <line x1="{{ printf "%.1f" .Duel.HomeMeanX }}" x2="{{ printf "%.1f" .Duel.HomeMeanX }}" y1="6" y2="{{ .Duel.Height }}" stroke="var(--series-1)" stroke-width="1" stroke-dasharray="3 3"/>
+        <line x1="{{ printf "%.1f" .Duel.AwayMeanX }}" x2="{{ printf "%.1f" .Duel.AwayMeanX }}" y1="6" y2="{{ .Duel.Height }}" stroke="var(--series-6)" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="4" y="{{ .Duel.Height }}" dy="-2" font-size="10" fill="var(--ink-muted)">0%</text>
+        <text x="{{ .Duel.Width }}" y="{{ .Duel.Height }}" dy="-2" text-anchor="end" font-size="10" fill="var(--ink-muted)">100%</text>
+      </svg>
+    </div>
+  </div>
+</section>
+{{ end }}
+
+<section>
+  <h2>Model board <span class="hint">deterministic view: posterior means, no sampling — live bets can differ</span></h2>
+  <div class="card table-wrap">
+    {{ if .Board }}
+    <table>
+      <thead><tr>
+        <th>Model</th><th class="num">Raw home</th><th class="num">Adjusted</th>
+        <th class="num">Confidence</th><th class="num">Blended</th><th>Pick</th>
+        <th class="num">EV</th><th class="num">Odds</th><th>Book</th>
+      </tr></thead>
+      <tbody>
+      {{ range .Board }}
+      <tr>
+        <td class="pick" data-th="Model"><span class="chip" style="background: var(--series-{{ .Slot }})"></span> {{ .Model }}</td>
+        <td class="num" data-th="Raw home">{{ prob .RawHome }}</td>
+        <td class="num" data-th="Adjusted">{{ if .Adjusted }}{{ prob .AdjHome }}{{ else }}—{{ end }}</td>
+        <td class="num" data-th="Confidence">{{ prob .Confidence }}</td>
+        <td class="num" data-th="Blended">{{ prob .BlendHome }}</td>
+        <td class="pick" data-th="Pick">{{ .Pick }}</td>
+        <td class="num {{ if gt .PickEV 0.0 }}good{{ end }}" data-th="EV">{{ if ne .Pick "no edge" }}{{ signed .PickEV }}{{ else }}—{{ end }}</td>
+        <td class="num" data-th="Odds">{{ if ne .Pick "no edge" }}{{ odds .PickOdds }}{{ else }}—{{ end }}</td>
+        <td data-th="Book">{{ .PickBook }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <div class="empty">No contender covers this sport.</div>
+    {{ end }}
+  </div>
+</section>
+
+{{ if .Elo }}
+<section id="elo-panel">
+  <h2>Elo trajectories <span class="hint">{{ .Game.HomeTeam }} {{ printf "%.0f" .Elo.HomeRating }} vs {{ .Game.AwayTeam }} {{ printf "%.0f" .Elo.AwayRating }} → implied {{ prob .Elo.ImpliedHome }} home</span></h2>
+  <div class="card">
+    <div class="chart-wrap">
+      <svg viewBox="0 0 {{ .Elo.Width }} {{ .Elo.Height }}" role="img" aria-label="Elo ratings over the season">
+        <path d="{{ .Elo.HomePath }}" fill="none" stroke="var(--series-1)" stroke-width="2"/>
+        <path d="{{ .Elo.AwayPath }}" fill="none" stroke="var(--series-6)" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+</section>
+{{ end }}
+
+<section>
+  <h2>Positions on this game</h2>
+  <div class="card table-wrap">
+    {{ if .Bets }}
+    <table>
+      <thead><tr><th>Model</th><th>Pick</th><th class="num">Odds</th><th class="num">Stake</th><th class="num">Model prob</th><th>Status</th><th class="num">Profit</th></tr></thead>
+      <tbody>
+      {{ range .Bets }}
+      <tr>
+        <td class="pick" data-th="Model">{{ .Bet.ModelID }}</td>
+        <td data-th="Pick">{{ title .Bet.Selection }} ML</td>
+        <td class="num" data-th="Odds">{{ odds .Bet.Odds }}</td>
+        <td class="num" data-th="Stake">{{ money .Bet.Stake }}</td>
+        <td class="num" data-th="Model prob">{{ prob .Bet.Probability }}</td>
+        <td data-th="Status">{{ if .Void }}<span class="result-void">Void</span>{{ else if .Won }}<span class="result-won">Won</span>{{ else if .Bet.SettledAt }}<span class="result-lost">Lost</span>{{ else }}pending{{ end }}</td>
+        <td class="num" data-th="Profit">{{ if .Bet.SettledAt }}{{ signed .Bet.Profit }}{{ else }}—{{ end }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ else }}
+    <div class="empty">No bets on this game.</div>
+    {{ end }}
+    {{ if .Previews }}
+    <table style="margin-top: 12px;">
+      <thead><tr><th>Model (preview)</th><th>Pick</th><th class="num">Odds</th><th class="num">Model prob</th><th class="num">Confidence</th><th>Status</th></tr></thead>
+      <tbody>
+      {{ range .Previews }}
+      <tr>
+        <td class="pick" data-th="Model">{{ .P.ModelID }}</td>
+        <td data-th="Pick">{{ title .P.Selection }} ML</td>
+        <td class="num" data-th="Odds">{{ odds .P.Odds }}</td>
+        <td class="num" data-th="Model prob">{{ prob .P.Probability }}</td>
+        <td class="num" data-th="Confidence">{{ prob .P.Confidence }}</td>
+        <td data-th="Status"><span class="badge badge-preview">{{ .P.Status }}</span></td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ end }}
+  </div>
+</section>
+
+<footer>Paper trading only — no real money. Page refreshes every 5 minutes.</footer>
+
+</body>
+</html>

@@ -13,8 +13,10 @@ type GamesProvider interface {
 	FinishedGames(sportKey string) ([]types.Game, error)
 }
 
+// EloInitial is the rating assigned to a team with no game history
+const EloInitial = 1500.0
+
 const (
-	eloInitial       = 1500.0
 	eloK             = 20.0
 	eloHomeAdvantage = 50.0 // rating points, applied when predicting and updating
 	eloCacheTTL      = 10 * time.Minute
@@ -54,11 +56,19 @@ func (e *Elo) Name() string { return "elo" }
 // win probability with the standard logistic curve.
 func (e *Elo) EstimateProbabilities(game types.Game) (float64, float64) {
 	r := e.ratingsFor(game.SportKey)
-	home := r.rating(game.HomeTeam) + eloHomeAdvantage
-	away := r.rating(game.AwayTeam)
-
-	homeProb := 1 / (1 + math.Pow(10, (away-home)/400))
+	homeProb := EloProbability(r.rating(game.HomeTeam), r.rating(game.AwayTeam))
 	return homeProb, 1 - homeProb
+}
+
+// MeanProbabilities equals EstimateProbabilities — Elo is deterministic
+func (e *Elo) MeanProbabilities(game types.Game) (float64, float64) {
+	return e.EstimateProbabilities(game)
+}
+
+// EloProbability converts two ratings into the home team's win probability
+// with the standard logistic curve, including home advantage.
+func EloProbability(homeRating, awayRating float64) float64 {
+	return 1 / (1 + math.Pow(10, (awayRating-(homeRating+eloHomeAdvantage))/400))
 }
 
 // Confidence ramps with the lesser-known team's rated games
@@ -78,7 +88,56 @@ func (r *eloRatings) rating(team string) float64 {
 	if v, ok := r.ratings[team]; ok {
 		return v
 	}
-	return eloInitial
+	return EloInitial
+}
+
+// applyGame folds one finished game into the ratings; no-op without scores
+func (r *eloRatings) applyGame(g types.Game) {
+	if g.HomeScore == nil || g.AwayScore == nil {
+		return
+	}
+	home := r.rating(g.HomeTeam)
+	away := r.rating(g.AwayTeam)
+
+	expectedHome := EloProbability(home, away)
+	outcome := 0.5
+	switch {
+	case *g.HomeScore > *g.AwayScore:
+		outcome = 1
+	case *g.HomeScore < *g.AwayScore:
+		outcome = 0
+	}
+
+	margin := math.Abs(float64(*g.HomeScore - *g.AwayScore))
+	delta := eloK * math.Log(margin+1) * (outcome - expectedHome)
+
+	r.ratings[g.HomeTeam] = home + delta
+	r.ratings[g.AwayTeam] = away - delta
+	r.gamesSeen[g.HomeTeam]++
+	r.gamesSeen[g.AwayTeam]++
+}
+
+// RatingPoint is one team's Elo rating immediately after a game
+type RatingPoint struct {
+	At     time.Time
+	Rating float64
+}
+
+// EloHistory replays finished games (oldest first, as FinishedGames
+// returns them) and records each team's rating after every game it
+// played — the same math the elo estimator uses.
+func EloHistory(games []types.Game) map[string][]RatingPoint {
+	r := &eloRatings{ratings: make(map[string]float64), gamesSeen: make(map[string]int)}
+	out := make(map[string][]RatingPoint)
+	for _, g := range games {
+		if g.HomeScore == nil || g.AwayScore == nil {
+			continue
+		}
+		r.applyGame(g)
+		out[g.HomeTeam] = append(out[g.HomeTeam], RatingPoint{At: g.CommenceTime, Rating: r.ratings[g.HomeTeam]})
+		out[g.AwayTeam] = append(out[g.AwayTeam], RatingPoint{At: g.CommenceTime, Rating: r.ratings[g.AwayTeam]})
+	}
+	return out
 }
 
 // ratingsFor returns the sport's ratings, rebuilding from stored games when
@@ -106,28 +165,7 @@ func (e *Elo) ratingsFor(sportKey string) *eloRatings {
 	}
 
 	for _, g := range games {
-		if g.HomeScore == nil || g.AwayScore == nil {
-			continue
-		}
-		home := r.rating(g.HomeTeam)
-		away := r.rating(g.AwayTeam)
-
-		expectedHome := 1 / (1 + math.Pow(10, (away-(home+eloHomeAdvantage))/400))
-		outcome := 0.5
-		switch {
-		case *g.HomeScore > *g.AwayScore:
-			outcome = 1
-		case *g.HomeScore < *g.AwayScore:
-			outcome = 0
-		}
-
-		margin := math.Abs(float64(*g.HomeScore - *g.AwayScore))
-		delta := eloK * math.Log(margin+1) * (outcome - expectedHome)
-
-		r.ratings[g.HomeTeam] = home + delta
-		r.ratings[g.AwayTeam] = away - delta
-		r.gamesSeen[g.HomeTeam]++
-		r.gamesSeen[g.AwayTeam]++
+		r.applyGame(g)
 	}
 
 	e.cache[sportKey] = r

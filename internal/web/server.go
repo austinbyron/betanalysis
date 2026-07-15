@@ -31,6 +31,8 @@ type Store interface {
 	GetPendingPreviewBets() ([]types.PreviewBet, error)
 	GetSettledPreviewBets() ([]types.PreviewBet, error)
 	GetAPIQuota() (*types.APIQuota, error)
+	FinishedGames(sportKey string) ([]types.Game, error)
+	GetAllTeamStats(sportKey string) ([]types.TeamStats, error)
 }
 
 // GameLinker resolves a game to an external detail page (ESPN gamecast).
@@ -47,11 +49,14 @@ type Server struct {
 	cfg     *config.Config
 	tmpl    *template.Template
 	httpSrv *http.Server
+	// stats is the priors-layered record source the contenders read; the
+	// analysis pages use it so charts show exactly what the models see.
+	stats analysis.StatsProvider
 }
 
 // NewServer creates the dashboard server for a model-race lineup. linker
 // may be nil to render without game links.
-func NewServer(store Store, lineup []contenders.Contender, cfg *config.Config, linker GameLinker) (*Server, error) {
+func NewServer(store Store, lineup []contenders.Contender, cfg *config.Config, linker GameLinker, stats analysis.StatsProvider) (*Server, error) {
 	funcs := template.FuncMap{
 		"inc":    func(i int) int { return i + 1 },
 		"money":  func(v float64) string { return fmt.Sprintf("$%.2f", v) },
@@ -66,6 +71,12 @@ func NewServer(store Store, lineup []contenders.Contender, cfg *config.Config, l
 			}
 			return strings.Join(words, " ")
 		},
+		"spanW": func(x1, x2 float64) float64 {
+			if w := x2 - x1; w > 1 {
+				return w
+			}
+			return 1 // a zero-width span still draws a sliver
+		},
 	}
 
 	tmpl, err := template.New("dashboard.html").Funcs(funcs).ParseFS(templateFS, "templates/*.html")
@@ -79,10 +90,13 @@ func NewServer(store Store, lineup []contenders.Contender, cfg *config.Config, l
 		linker: linker,
 		cfg:    cfg,
 		tmpl:   tmpl,
+		stats:  stats,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleDashboard)
+	mux.HandleFunc("GET /analysis", s.handleAnalysis)
+	mux.HandleFunc("GET /analysis/game/{id}", s.handleMatchup)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))

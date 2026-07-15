@@ -78,7 +78,7 @@ func main() {
 
 	var dashboard *web.Server
 	if cfg.Server.Enabled {
-		dashboard, err = web.NewServer(db, lineup, cfg, espn.NewLinker())
+		dashboard, err = web.NewServer(db, lineup, cfg, espn.NewLinker(), stats)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to create dashboard server")
 		}

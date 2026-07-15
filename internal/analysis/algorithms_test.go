@@ -401,3 +401,103 @@ func TestPriorsRaiseWarmupConfidence(t *testing.T) {
 		t.Errorf("confidence = %v, want 0 — limited by the unseeded team", got)
 	}
 }
+
+func TestThompsonMeanProbabilitiesIsDeterministic(t *testing.T) {
+	stats := fakeStats{"Padres": {30, 10}, "Dodgers": {20, 20}}
+	ts := NewThompsonSampling(config.AnalysisConfig{ThompsonAlphaPrior: 1, ThompsonBetaPrior: 1}, stats)
+	game := types.Game{HomeTeam: "Padres", AwayTeam: "Dodgers", SportKey: "baseball_mlb"}
+
+	// Beta means: home (30+1)/(40+2)=0.7381, away (20+1)/(40+2)=0.5
+	wantHome := (31.0 / 42.0) / (31.0/42.0 + 21.0/42.0)
+	h1, a1 := ts.MeanProbabilities(game)
+	h2, a2 := ts.MeanProbabilities(game)
+	if h1 != h2 || a1 != a2 {
+		t.Fatalf("mean must be deterministic: got (%v,%v) then (%v,%v)", h1, a1, h2, a2)
+	}
+	if math.Abs(h1-wantHome) > 1e-9 {
+		t.Fatalf("home mean = %v, want %v", h1, wantHome)
+	}
+	if math.Abs(h1+a1-1) > 1e-9 {
+		t.Fatalf("pair must normalize: %v + %v", h1, a1)
+	}
+}
+
+func TestMeanProbabilitiesHelperFallsBack(t *testing.T) {
+	stats := fakeStats{"A": {5, 5}, "B": {5, 5}}
+	h := NewHistorical(stats)
+	game := types.Game{HomeTeam: "A", AwayTeam: "B"}
+	mh, ma := MeanProbabilities(h, game)
+	eh, ea := h.EstimateProbabilities(game)
+	if mh != eh || ma != ea {
+		t.Fatalf("historical mean should equal its deterministic estimate")
+	}
+}
+
+func TestEpsilonGreedyMeanHasNoNoise(t *testing.T) {
+	stats := fakeStats{"A": {9, 1}, "B": {1, 9}}
+	e := NewEpsilonGreedy(config.AnalysisConfig{Epsilon: 1.0}, stats) // always explores
+	game := types.Game{HomeTeam: "A", AwayTeam: "B"}
+	h1, _ := e.MeanProbabilities(game)
+	h2, _ := e.MeanProbabilities(game)
+	if h1 != h2 {
+		t.Fatalf("mean must ignore exploration noise: %v vs %v", h1, h2)
+	}
+}
+
+// meanShiftAdjuster nudges home prob up by a fixed amount, for wrapper tests
+type meanShiftAdjuster struct{ shift float64 }
+
+func (m meanShiftAdjuster) Name() string { return "shift" }
+func (m meanShiftAdjuster) Adjust(_ types.Game, h, a float64) (float64, float64) {
+	return h + m.shift, a - m.shift
+}
+
+func TestAdjustedEstimatorMeanAppliesAdjusters(t *testing.T) {
+	stats := fakeStats{"A": {5, 5}, "B": {5, 5}}
+	inner := NewHistorical(stats)
+	wrapped := WithAdjusters(inner, meanShiftAdjuster{shift: 0.1})
+	game := types.Game{HomeTeam: "A", AwayTeam: "B"}
+
+	ih, _ := MeanProbabilities(inner, game)
+	wh, _ := MeanProbabilities(wrapped, game)
+	if math.Abs(wh-(ih+0.1)) > 1e-9 {
+		t.Fatalf("adjusted mean = %v, want inner %v + 0.1", wh, ih)
+	}
+}
+
+func TestSelectorViewExposesRawAndAdjusted(t *testing.T) {
+	stats := fakeStats{"A": {5, 5}, "B": {5, 5}}
+	inner := NewHistorical(stats)
+	est := WithAdjusters(inner, meanShiftAdjuster{shift: 0.1})
+	sel := NewSelector(est, "m", 0.7, 1.5, 0.05)
+	game := types.Game{HomeTeam: "A", AwayTeam: "B"}
+
+	v := sel.View(game)
+	if !v.HasAdjusters {
+		t.Fatal("HasAdjusters should be true")
+	}
+	if math.Abs(v.AdjHome-(v.RawHome+0.1)) > 1e-9 {
+		t.Fatalf("adjusted %v should be raw %v + 0.1", v.AdjHome, v.RawHome)
+	}
+	if v.Confidence != 1 {
+		t.Fatalf("no warmup configured, confidence = %v, want 1", v.Confidence)
+	}
+	if sel.MarketWeight() != 0.7 {
+		t.Fatalf("MarketWeight = %v", sel.MarketWeight())
+	}
+	if mo, mev := sel.Thresholds(); mo != 1.5 || mev != 0.05 {
+		t.Fatalf("Thresholds = %v, %v", mo, mev)
+	}
+}
+
+func TestSelectorViewWithoutAdjusters(t *testing.T) {
+	stats := fakeStats{"A": {5, 5}, "B": {5, 5}}
+	sel := NewSelector(NewHistorical(stats), "m", 0.7, 1.5, 0.05)
+	v := sel.View(types.Game{HomeTeam: "A", AwayTeam: "B"})
+	if v.HasAdjusters {
+		t.Fatal("HasAdjusters should be false")
+	}
+	if v.RawHome != v.AdjHome || v.RawAway != v.AdjAway {
+		t.Fatal("raw and adjusted must match without adjusters")
+	}
+}

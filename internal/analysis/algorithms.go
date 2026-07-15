@@ -29,6 +29,23 @@ type Estimator interface {
 	Confidence(game types.Game) float64
 }
 
+// MeanEstimator reports the deterministic center of an estimator's
+// probability estimate — EstimateProbabilities with all sampling and
+// exploration noise removed. Display code uses it so pages stay stable
+// across refreshes.
+type MeanEstimator interface {
+	MeanProbabilities(game types.Game) (homeProb, awayProb float64)
+}
+
+// MeanProbabilities returns the deterministic estimate for any estimator,
+// falling back to EstimateProbabilities for estimators without noise.
+func MeanProbabilities(e Estimator, game types.Game) (float64, float64) {
+	if m, ok := e.(MeanEstimator); ok {
+		return m.MeanProbabilities(game)
+	}
+	return e.EstimateProbabilities(game)
+}
+
 // PriorsProvider supplies per-team Beta pseudo-counts seeded from market
 // expectations (e.g. preseason win totals), so a season doesn't start every
 // team at 50/50.
@@ -97,6 +114,15 @@ func WithAdjusters(inner Estimator, adjusters ...GameAdjuster) Estimator {
 // EstimateProbabilities runs the inner estimator then each adjuster
 func (a *adjustedEstimator) EstimateProbabilities(game types.Game) (float64, float64) {
 	homeProb, awayProb := a.Estimator.EstimateProbabilities(game)
+	for _, adj := range a.adjusters {
+		homeProb, awayProb = adj.Adjust(game, homeProb, awayProb)
+	}
+	return homeProb, awayProb
+}
+
+// MeanProbabilities runs the inner estimator's mean then each adjuster
+func (a *adjustedEstimator) MeanProbabilities(game types.Game) (float64, float64) {
+	homeProb, awayProb := MeanProbabilities(a.Estimator, game)
 	for _, adj := range a.adjusters {
 		homeProb, awayProb = adj.Adjust(game, homeProb, awayProb)
 	}
@@ -172,6 +198,16 @@ func (t *ThompsonSampling) sample(team, sportKey string) float64 {
 	return dist.Rand()
 }
 
+// MeanProbabilities uses each Beta posterior's mean instead of a sample
+func (t *ThompsonSampling) MeanProbabilities(game types.Game) (float64, float64) {
+	return normalizePair(t.mean(game.HomeTeam, game.SportKey), t.mean(game.AwayTeam, game.SportKey))
+}
+
+func (t *ThompsonSampling) mean(team, sportKey string) float64 {
+	wins, losses := t.stats.TeamRecord(team, sportKey)
+	return (float64(wins) + t.alphaPrior) / (float64(wins+losses) + t.alphaPrior + t.betaPrior)
+}
+
 // EpsilonGreedy uses smoothed win rates, occasionally perturbing them to
 // explore selections the raw record wouldn't pick.
 type EpsilonGreedy struct {
@@ -215,6 +251,13 @@ func (e *EpsilonGreedy) EstimateProbabilities(game types.Game) (float64, float64
 	return normalizePair(homeProb, awayProb)
 }
 
+// MeanProbabilities is the smoothed win-rate estimate without exploration noise
+func (e *EpsilonGreedy) MeanProbabilities(game types.Game) (float64, float64) {
+	return normalizePair(
+		smoothedWinRate(e.stats, game.HomeTeam, game.SportKey),
+		smoothedWinRate(e.stats, game.AwayTeam, game.SportKey))
+}
+
 // Historical uses win rates shrunk toward the league average — teams with few
 // games are pulled strongly toward 0.5.
 type Historical struct {
@@ -243,6 +286,11 @@ func (h *Historical) EstimateProbabilities(game types.Game) (float64, float64) {
 	homeProb := (1-h.shrinkage)*smoothedWinRate(h.stats, game.HomeTeam, game.SportKey) + h.shrinkage*leagueAvg
 	awayProb := (1-h.shrinkage)*smoothedWinRate(h.stats, game.AwayTeam, game.SportKey) + h.shrinkage*leagueAvg
 	return normalizePair(homeProb, awayProb)
+}
+
+// MeanProbabilities equals EstimateProbabilities — Historical is deterministic
+func (h *Historical) MeanProbabilities(game types.Game) (float64, float64) {
+	return h.EstimateProbabilities(game)
 }
 
 // smoothedWinRate returns a Laplace-smoothed win rate so teams with no record
@@ -325,6 +373,35 @@ func (s *Selector) RecommendBoth(game types.Game, odds []types.GameOdds) (bet, p
 func (s *Selector) Confidence(game types.Game) float64 {
 	return s.estimator.Confidence(game)
 }
+
+// ModelView is a Selector's deterministic opinion on one game, for display.
+// Thompson rows show posterior means here; live betting samples around them.
+type ModelView struct {
+	RawHome, RawAway float64 // estimator mean before adjusters
+	AdjHome, AdjAway float64 // after adjusters; equals raw without any
+	Confidence       float64
+	HasAdjusters     bool
+}
+
+// View reports the selector's deterministic probabilities for a game
+func (s *Selector) View(game types.Game) ModelView {
+	v := ModelView{Confidence: s.estimator.Confidence(game)}
+	if a, ok := s.estimator.(*adjustedEstimator); ok {
+		v.HasAdjusters = true
+		v.RawHome, v.RawAway = MeanProbabilities(a.Estimator, game)
+		v.AdjHome, v.AdjAway = a.MeanProbabilities(game)
+		return v
+	}
+	v.RawHome, v.RawAway = MeanProbabilities(s.estimator, game)
+	v.AdjHome, v.AdjAway = v.RawHome, v.RawAway
+	return v
+}
+
+// MarketWeight exposes the market share of the blend for display math
+func (s *Selector) MarketWeight() float64 { return s.marketWeight }
+
+// Thresholds exposes the bet gates for display math
+func (s *Selector) Thresholds() (minOdds, minEV float64) { return s.minOdds, s.minEV }
 
 // bestBet returns the highest-EV moneyline bet across bookmakers for one
 // market blend weight, or nil when nothing clears the thresholds.

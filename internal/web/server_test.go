@@ -23,6 +23,8 @@ type fakeStore struct {
 	pendingPreviews []types.PreviewBet
 	settledPreviews []types.PreviewBet
 	quota           *types.APIQuota
+	finished        map[string][]types.Game
+	teamStats       map[string][]types.TeamStats
 }
 
 func (f *fakeStore) GetPortfolio(id string) (*types.Portfolio, error) { return f.portfolios[id], nil }
@@ -48,6 +50,12 @@ func (f *fakeStore) GetSettledPreviewBets() ([]types.PreviewBet, error) {
 	return f.settledPreviews, nil
 }
 func (f *fakeStore) GetAPIQuota() (*types.APIQuota, error) { return f.quota, nil }
+func (f *fakeStore) FinishedGames(sport string) ([]types.Game, error) {
+	return f.finished[sport], nil
+}
+func (f *fakeStore) GetAllTeamStats(sport string) ([]types.TeamStats, error) {
+	return f.teamStats[sport], nil
+}
 
 type fixedStats struct{}
 
@@ -85,7 +93,16 @@ func newTestServer(t *testing.T, store *fakeStore) *Server {
 
 func newTestServerWithLineup(t *testing.T, store *fakeStore, lineup []contenders.Contender) *Server {
 	t.Helper()
-	srv, err := NewServer(store, lineup, testConfig(), nil)
+	srv, err := NewServer(store, lineup, testConfig(), nil, fixedStats{})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	return srv
+}
+
+func newTestServerWithLineupAndStats(t *testing.T, store *fakeStore, lineup []contenders.Contender, stats analysis.StatsProvider) *Server {
+	t.Helper()
+	srv, err := NewServer(store, lineup, testConfig(), nil, stats)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -117,7 +134,7 @@ func TestDashboardLinksGamesToESPN(t *testing.T) {
 		{Name: "hist-a", Portfolio: "default", Selector: testSelector("hist-a")},
 	}
 	linker := fakeLinker{"g3": "https://www.espn.com/mlb/game/_/gameId/12345"}
-	srv, err := NewServer(store, lineup, testConfig(), linker)
+	srv, err := NewServer(store, lineup, testConfig(), linker, fixedStats{})
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -594,5 +611,17 @@ func TestDashboardDefinesNinePaletteSlots(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard palette missing %q", want)
 		}
+	}
+}
+
+func TestDashboardLinksToAnalysis(t *testing.T) {
+	store := &fakeStore{portfolios: map[string]*types.Portfolio{
+		"default": {ID: "default", Balance: 1000, InitialBankroll: 1000},
+	}}
+	srv := newTestServer(t, store)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if !strings.Contains(rec.Body.String(), `href="/analysis"`) {
+		t.Fatal("dashboard must link to /analysis")
 	}
 }

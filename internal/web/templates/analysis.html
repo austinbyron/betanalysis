@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="refresh" content="300">
+<title>betanalysis · analysis</title>
+{{ template "base-style" . }}
+<style>
+  .strip-row { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr); gap: 8px 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+  .strip-row:last-child { border-bottom: none; }
+  .strip-row a { color: inherit; text-decoration: none; }
+  .strip-row:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+  .strip-meta { font-size: 13.5px; }
+  .strip-meta .when { color: var(--ink-muted); font-size: 12px; display: block; }
+  .strip-svg { width: 100%; height: auto; display: block; }
+  .footnote { color: var(--ink-muted); font-size: 12px; margin-top: 8px; }
+  @media (max-width: 640px) { .strip-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>betanalysis · analysis</h1>
+  <span class="meta"><a href="/" style="color: inherit;">← dashboard</a></span>
+  <span class="meta">{{ .GeneratedAt.Format "Jan 2 15:04" }}</span>
+</header>
+
+<section>
+  <h2>Matchups: models vs market <span class="hint">home-win probability — dots are models, the white tick is the de-vigged market. Sorted by disagreement with the market. Click a game to drill in.</span></h2>
+  <div class="card">
+    <div class="legend">
+      {{ range $i, $m := .Models }}
+      <span class="legend-item"><span class="chip" style="background: var(--series-{{ inc $i }})"></span>{{ $m }}</span>
+      {{ end }}
+      <span class="legend-item"><span class="chip" style="background: var(--ink)"></span>market</span>
+    </div>
+    {{ if .Matchups }}
+    {{ range .Matchups }}
+    <a href="/analysis/game/{{ .Game.ID }}">
+    <div class="strip-row">
+      <div class="strip-meta">
+        <span class="pick">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</span>
+        <span class="when">{{ title .Sport }} · {{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }} · market {{ prob .MarketProb }} home · gap {{ prob .Gap }}</span>
+      </div>
+      <svg class="strip-svg" viewBox="-10 0 660 28" role="img" aria-label="Model probabilities vs market">
+        <line x1="0" x2="640" y1="14" y2="14" stroke="var(--grid)" stroke-width="2"/>
+        <line x1="320" x2="320" y1="8" y2="20" stroke="var(--baseline)" stroke-width="1"/>
+        <rect x="{{ printf "%.1f" .SpanX1 }}" y="12" width="{{ printf "%.1f" (spanW .SpanX1 .SpanX2) }}" height="4" fill="var(--baseline)"/>
+        <line x1="{{ printf "%.1f" .MarketX }}" x2="{{ printf "%.1f" .MarketX }}" y1="5" y2="23" stroke="var(--ink)" stroke-width="2"/>
+        {{ range .Dots }}
+        <circle cx="{{ printf "%.1f" .X }}" cy="14" r="5" fill="var(--series-{{ .Slot }})" stroke="var(--surface)" stroke-width="1.5">
+          <title>{{ .Model }}: {{ prob .Prob }} home</title>
+        </circle>
+        {{ end }}
+      </svg>
+    </div>
+    </a>
+    {{ end }}
+    {{ else }}
+    <div class="empty">No upcoming games with odds.</div>
+    {{ end }}
+    <div class="footnote">Thompson positions are Beta posterior means — live betting samples around them, so placed bets can differ from this page.</div>
+  </div>
+</section>
+
+{{ if .Teams }}
+<section id="team-strength">
+  <h2>Team strength <span class="hint">Beta posterior per team — dot is the mean, bar the 95% credible interval. Wide bar = thin record = where Thompson explores. Priors included.</span></h2>
+  {{ range .Teams }}
+  <div class="card" style="margin-bottom: 12px;">
+    <h2 style="margin-bottom: 12px;">{{ title .Sport }}</h2>
+    {{ range .Teams }}
+    <div class="strip-row">
+      <div class="strip-meta">
+        <span class="pick">{{ .Team }}</span>
+        <span class="when">{{ .Wins }}–{{ .Losses }} · mean {{ prob .Mean }} ({{ prob .Lo }}–{{ prob .Hi }})</span>
+      </div>
+      <svg class="strip-svg" viewBox="-10 0 660 20" role="img" aria-label="Win-rate credible interval">
+        <line x1="0" x2="640" y1="10" y2="10" stroke="var(--grid)" stroke-width="1"/>
+        <line x1="320" x2="320" y1="5" y2="15" stroke="var(--baseline)" stroke-width="1"/>
+        <line x1="{{ printf "%.1f" .LoX }}" x2="{{ printf "%.1f" .HiX }}" y1="10" y2="10" stroke="var(--series-1)" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+        <circle cx="{{ printf "%.1f" .MeanX }}" cy="10" r="4.5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    {{ end }}
+  </div>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ if .Elo }}
+<section id="elo-landscape">
+  <h2>Elo landscape <span class="hint">current ratings from the score-replay, with 14-day movement</span></h2>
+  {{ range .Elo }}
+  <div class="card" style="margin-bottom: 12px;">
+    <h2 style="margin-bottom: 12px;">{{ title .Sport }}</h2>
+    {{ range .Rows }}
+    <div class="strip-row">
+      <div class="strip-meta">
+        <span class="pick">{{ .Team }}</span>
+        <span class="when">{{ printf "%.0f" .Rating }} · 14d <span class="{{ if .Positive }}good{{ else }}bad{{ end }}">{{ printf "%+.0f" .Delta14 }}</span></span>
+      </div>
+      <svg class="strip-svg" viewBox="-10 0 660 18" role="img" aria-label="Elo rating bar">
+        <rect x="0" y="4" width="{{ printf "%.1f" .BarX }}" height="10" rx="2" fill="var(--series-7)" opacity="0.7"/>
+      </svg>
+    </div>
+    {{ end }}
+  </div>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ if .Diags }}
+<section id="diagnostics">
+  <h2>Model diagnostics <span class="hint">calibration from settled bets + shadow previews (dots on the diagonal = trustworthy probabilities; bins under 5 samples hidden), plus the odds and EV each model chases</span></h2>
+  <div class="tiles">
+    {{ range .Diags }}
+    <div class="tile">
+      <div class="label"><span class="chip" style="background: var(--series-{{ .Slot }})"></span> {{ .Model }} · n={{ .N }}</div>
+      <svg viewBox="-4 -4 208 208" width="100%" role="img" aria-label="Calibration">
+        <rect x="0" y="0" width="200" height="200" fill="none" stroke="var(--grid)"/>
+        <line x1="0" y1="200" x2="200" y2="0" stroke="var(--baseline)" stroke-dasharray="4 4"/>
+        {{ range .Calib }}
+        <circle cx="{{ printf "%.1f" .X }}" cy="{{ printf "%.1f" .Y }}" r="5" fill="var(--series-1)">
+          <title>{{ .Label }}</title>
+        </circle>
+        {{ end }}
+        {{ if not .Calib }}
+        <text x="100" y="104" text-anchor="middle" font-size="11" fill="var(--ink-muted)">not enough settled bets</text>
+        {{ end }}
+      </svg>
+      <div class="sub">odds taken (1.0–4.0)</div>
+      <svg viewBox="-10 0 660 14" width="100%" role="img" aria-label="Odds distribution">
+        <line x1="0" x2="640" y1="7" y2="7" stroke="var(--grid)"/>
+        {{ range .OddsXs }}<circle cx="{{ printf "%.1f" . }}" cy="7" r="3" fill="var(--series-3)" opacity="0.55"/>{{ end }}
+      </svg>
+      <div class="sub">EV chased (0–50%)</div>
+      <svg viewBox="-10 0 660 14" width="100%" role="img" aria-label="EV distribution">
+        <line x1="0" x2="640" y1="7" y2="7" stroke="var(--grid)"/>
+        {{ range .EVXs }}<circle cx="{{ printf "%.1f" . }}" cy="7" r="3" fill="var(--series-2)" opacity="0.55"/>{{ end }}
+      </svg>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+
+<footer>Page refreshes every 5 minutes.</footer>
+
+</body>
+</html>

@@ -1,11 +1,16 @@
 package analysis
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/austinbyron/betanalysis/pkg/types"
 )
+
+type stubGames []types.Game
+
+func (s stubGames) FinishedGames(string) ([]types.Game, error) { return s, nil }
 
 // fakeGames serves a fixed slate of finished games and counts fetches
 type fakeGames struct {
@@ -106,5 +111,42 @@ func TestEloCachesRatingsBetweenCalls(t *testing.T) {
 func TestEloName(t *testing.T) {
 	if got := NewElo(&fakeGames{}, 0).Name(); got != "elo" {
 		t.Errorf("Name = %q, want elo", got)
+	}
+}
+
+func TestEloHistoryMatchesEstimator(t *testing.T) {
+	h, a := 7, 3
+	h2, a2 := 2, 5
+	games := []types.Game{
+		{HomeTeam: "A", AwayTeam: "B", SportKey: "s", Status: "finished",
+			CommenceTime: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), HomeScore: &h, AwayScore: &a},
+		{HomeTeam: "B", AwayTeam: "A", SportKey: "s", Status: "finished",
+			CommenceTime: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC), HomeScore: &h2, AwayScore: &a2},
+	}
+
+	hist := EloHistory(games)
+	if len(hist["A"]) != 2 || len(hist["B"]) != 2 {
+		t.Fatalf("each team played 2 games: A=%d B=%d", len(hist["A"]), len(hist["B"]))
+	}
+	// A won both; its rating must rise monotonically from the initial value
+	if !(hist["A"][0].Rating > EloInitial && hist["A"][1].Rating > hist["A"][0].Rating) {
+		t.Fatalf("winner's rating should rise: %+v", hist["A"])
+	}
+
+	// The final replayed ratings must imply the same probability the live
+	// estimator computes from the same games.
+	elo := NewElo(stubGames(games), 0)
+	wantHome, _ := elo.EstimateProbabilities(types.Game{HomeTeam: "A", AwayTeam: "B", SportKey: "s"})
+	finalA := hist["A"][1].Rating
+	finalB := hist["B"][1].Rating
+	if got := EloProbability(finalA, finalB); math.Abs(got-wantHome) > 1e-9 {
+		t.Fatalf("EloProbability(%v,%v)=%v, estimator says %v", finalA, finalB, got, wantHome)
+	}
+}
+
+func TestEloHistorySkipsUnscoredGames(t *testing.T) {
+	games := []types.Game{{HomeTeam: "A", AwayTeam: "B", SportKey: "s"}}
+	if len(EloHistory(games)) != 0 {
+		t.Fatal("games without scores must be skipped")
 	}
 }

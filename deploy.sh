@@ -22,8 +22,11 @@ scp -q build/daemon "$PI:$APP_DIR/daemon.new"
 scp -q build/betanalysis "$PI:$APP_DIR/betanalysis.new"
 scp -q deploy/betanalysis.service deploy/bootstrap-pi.sh "$PI:$APP_DIR/"
 scp -q migrations/*.sql "$PI:$APP_DIR/migrations/"
-# Ship the API key if present locally (gitignored on both ends)
-[ -f .env ] && scp -q .env "$PI:$APP_DIR/.env"
+# Seed the API key ONLY on first deploy — the Pi's .env is live state
+# (it holds the rotated DB password) and must never be clobbered.
+if [ -f .env ] && ! ssh "$PI" "[ -f $APP_DIR/.env ]"; then
+    scp -q .env "$PI:$APP_DIR/.env"
+fi
 ssh "$PI" "chmod +x $APP_DIR/daemon.new $APP_DIR/betanalysis.new $APP_DIR/bootstrap-pi.sh && mv $APP_DIR/daemon.new $APP_DIR/daemon && mv $APP_DIR/betanalysis.new $APP_DIR/betanalysis"
 # Config: only place the default if none exists — never clobber live config
 scp -q deploy/config.pi.yaml "$PI:$APP_DIR/config.pi.yaml"
