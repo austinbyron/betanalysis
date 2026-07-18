@@ -310,6 +310,36 @@ func TestRecommendBothPreviewsSuppressedBet(t *testing.T) {
 	}
 }
 
+func TestRecommendMeanBetStableForStochasticModels(t *testing.T) {
+	stats := fakeStats{"Strong": {90, 10}, "Weak": {10, 90}}
+	ts := NewThompsonSampling(config.AnalysisConfig{ThompsonAlphaPrior: 1, ThompsonBetaPrior: 1}, stats)
+	sel := NewSelector(ts, "", 0, 1.5, 0.01)
+
+	game := types.Game{ID: "g1", HomeTeam: "Strong", AwayTeam: "Weak"}
+	odds := []types.GameOdds{
+		{GameID: "g1", Bookmaker: "book", MarketType: types.MarketMoneyline, HomeOdds: f64(1.6), AwayOdds: f64(2.4)},
+	}
+
+	first := sel.RecommendMeanBet(game, odds)
+	if first == nil {
+		t.Fatal("expected a recommendation for a heavy favorite at generous odds")
+	}
+	if first.Selection != types.OutcomeHome {
+		t.Fatalf("90-10 team should be the pick, got %q", first.Selection)
+	}
+	// marketWeight 0 + full confidence: probability must be the exact
+	// posterior mean, not a sample around it.
+	if want := 91.0 / 102.0; !almostEqual(first.Probability, want) {
+		t.Errorf("probability = %v, want posterior mean %v", first.Probability, want)
+	}
+	for i := 0; i < 25; i++ {
+		bet := sel.RecommendMeanBet(game, odds)
+		if bet == nil || bet.Selection != first.Selection || !almostEqual(bet.Probability, first.Probability) {
+			t.Fatalf("call %d re-rolled the recommendation: got %+v, want %+v", i, bet, first)
+		}
+	}
+}
+
 func TestConfidenceRampsWithGamesPlayed(t *testing.T) {
 	stats := fakeStats{"Ready": {15, 10}, "Half": {5, 5}, "Cold": {0, 0}}
 

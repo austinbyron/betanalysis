@@ -347,6 +347,18 @@ func (s *Selector) RecommendBet(game types.Game, odds []types.GameOdds) *types.B
 	return bet
 }
 
+// RecommendMeanBet is RecommendBet computed from the estimator's
+// deterministic mean instead of a live sample, so stochastic models
+// (Thompson, epsilon-greedy) return the same pick on every call. Display
+// surfaces use it to stay stable across refreshes; the trading engine
+// keeps sampling through RecommendBet — that randomness is the
+// exploration mechanism, not noise.
+func (s *Selector) RecommendMeanBet(game types.Game, odds []types.GameOdds) *types.Bet {
+	modelHome, modelAway := MeanProbabilities(s.estimator, game)
+	confidence := s.estimator.Confidence(game)
+	return s.bestBet(game, odds, modelHome, modelAway, (1-s.marketWeight)*confidence)
+}
+
 // RecommendBoth evaluates one probability sample twice: bet uses the
 // confidence-scaled blend (what the engine actually places), preview uses
 // the full model weight (what the model would bet with a mature record).

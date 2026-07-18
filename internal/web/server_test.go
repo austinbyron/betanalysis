@@ -301,6 +301,54 @@ func TestRecommendationsListEveryContender(t *testing.T) {
 	}
 }
 
+// recordedStats is a StatsProvider with fixed per-team records
+type recordedStats map[string][2]int
+
+func (r recordedStats) TeamRecord(team, _ string) (int, int) {
+	rec := r[team]
+	return rec[0], rec[1]
+}
+
+func TestRecommendationsStableAcrossPageLoads(t *testing.T) {
+	// Thompson samples its posterior on every EstimateProbabilities call, so
+	// recommendations built live per page load re-roll on each refresh. The
+	// dashboard must show the deterministic posterior-mean pick instead.
+	stats := recordedStats{"Padres": {60, 40}, "Dodgers": {40, 60}}
+	store := &fakeStore{
+		portfolios: map[string]*types.Portfolio{
+			"default": {ID: "default", Balance: 1000, InitialBankroll: 1000},
+		},
+		games: []types.Game{{ID: "g3", HomeTeam: "Padres", AwayTeam: "Dodgers", SportKey: "baseball_mlb",
+			Status: "scheduled", CommenceTime: time.Now().Add(5 * time.Hour)}},
+		odds: map[string][]types.GameOdds{
+			"g3": {{GameID: "g3", Bookmaker: "draftkings", MarketType: types.MarketMoneyline,
+				HomeOdds: f64(2.2), AwayOdds: f64(2.2), RetrievedAt: time.Now()}},
+		},
+	}
+	thompson := analysis.NewThompsonSampling(config.AnalysisConfig{ThompsonAlphaPrior: 1, ThompsonBetaPrior: 1}, stats)
+	lineup := []contenders.Contender{
+		{Name: "thompson-raw", Portfolio: "default", Selector: analysis.NewSelector(thompson, "thompson-raw", 0, 1.5, 0.01)},
+	}
+	srv := newTestServerWithLineupAndStats(t, store, lineup, stats)
+
+	portfolios := map[string]*types.Portfolio{"default": store.portfolios["default"]}
+	first, _ := srv.buildRecommendations(portfolios)
+	if len(first) != 1 {
+		t.Fatalf("recommendations = %d, want 1", len(first))
+	}
+	for i := 0; i < 25; i++ {
+		recs, _ := srv.buildRecommendations(portfolios)
+		if len(recs) != 1 {
+			t.Fatalf("load %d: recommendations = %d, want 1", i, len(recs))
+		}
+		if recs[0].Bet.Selection != first[0].Bet.Selection ||
+			recs[0].Bet.Probability != first[0].Bet.Probability ||
+			recs[0].Stake != first[0].Stake {
+			t.Fatalf("load %d re-rolled the recommendation: got %+v, want %+v", i, recs[0], first[0])
+		}
+	}
+}
+
 func TestWarmupPreviewShowsSuppressedBets(t *testing.T) {
 	// Cold records + warmup gate: the blend collapses to the market, so no
 	// bet clears — but the full-confidence pick must render as a preview.

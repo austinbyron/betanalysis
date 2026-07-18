@@ -407,9 +407,8 @@ func (s *Server) buildDashboard() dashboardData {
 
 // buildPreviews reads the persisted warmup previews: pending picks for the
 // preview table plus each model's settled shadow record. Previews are
-// recorded by the trading cycle at decision time — unlike the
-// recommendations table they don't re-roll stochastic models per page load,
-// which is what makes the shadow record scoreable.
+// recorded by the trading cycle at decision time — they capture the actual
+// sampled decision, which is what makes the shadow record scoreable.
 func (s *Server) buildPreviews() ([]previewRow, []shadowRow) {
 	pending, err := s.store.GetPendingPreviewBets()
 	if err != nil {
@@ -475,7 +474,9 @@ func (s *Server) buildPreviews() ([]previewRow, []shadowRow) {
 }
 
 // buildRecommendations runs every contender read-only over upcoming games —
-// what each model would bet right now, without placing anything. Odds are
+// each model's posterior-mean pick, without placing anything. Means, not
+// live samples: Thompson and epsilon-greedy re-roll per call, and a table
+// that changes on every refresh reads as a bug. Odds are
 // fetched once per game and shared across the lineup. The returned picks
 // (per game, per model) feed the consensus section. Warmup-suppressed picks
 // deliberately stay out of both: the preview section reads the persisted
@@ -520,7 +521,7 @@ func (s *Server) buildRecommendations(portfolios map[string]*types.Portfolio) ([
 					continue
 				}
 
-				bet := c.Selector.RecommendBet(game, odds)
+				bet := c.Selector.RecommendMeanBet(game, odds)
 				if bet == nil {
 					continue
 				}
