@@ -46,7 +46,9 @@ func NewReconciler(store Store, results ResultSource) *Reconciler {
 // already exists under the replacement event id. Postponed, canceled, or
 // vanished games void their bets: stake refunded, record untouched.
 func (r *Reconciler) ReconcileStaleBets() error {
-	games, err := r.store.GetStaleScheduledGames(time.Now().Add(-reconcileGrace))
+	// commence_time is stored as a UTC wall clock; pass a UTC cutoff so the
+	// timestamp column comparison isn't skewed by the server's local zone.
+	games, err := r.store.GetStaleScheduledGames(time.Now().UTC().Add(-reconcileGrace))
 	if err != nil {
 		return fmt.Errorf("failed to get stale scheduled games: %w", err)
 	}

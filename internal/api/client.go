@@ -181,7 +181,9 @@ func (c *Client) GetOdds(sport string) ([]types.Game, []types.GameOdds, error) {
 
 	games := make([]types.Game, 0, len(oddsResp))
 	odds := make([]types.GameOdds, 0)
-	now := time.Now()
+	// UTC so retrieved_at matches the UTC wall-clock convention of the
+	// timestamp columns (commence_time, last_update) it gets compared with.
+	now := time.Now().UTC()
 
 	for _, or := range oddsResp {
 		games = append(games, types.Game{

@@ -86,7 +86,10 @@ func (p *PostgresDB) SaveGames(games []types.Game) error {
 	return nil
 }
 
-// GetUpcomingGames returns scheduled games for a sport
+// GetUpcomingGames returns scheduled games for a sport. commence_time holds
+// a UTC wall clock, so the comparison must use UTC now — bare NOW() is the
+// session's local time, which kept games "upcoming" for hours after first
+// pitch and let the engine bet on games already in play.
 func (p *PostgresDB) GetUpcomingGames(sportKey string) ([]types.Game, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -95,7 +98,7 @@ func (p *PostgresDB) GetUpcomingGames(sportKey string) ([]types.Game, error) {
 	query := `
 		SELECT id, sport_key, commence_time, home_team, away_team, status, home_score, away_score, created_at, updated_at
 		FROM games
-		WHERE sport_key = $1 AND status = 'scheduled' AND commence_time > NOW()
+		WHERE sport_key = $1 AND status = 'scheduled' AND commence_time > timezone('UTC', NOW())
 		ORDER BY commence_time ASC
 	`
 
@@ -744,11 +747,11 @@ func (p *PostgresDB) SaveAPIQuota(remaining, used float64) error {
 
 	query := `
 		INSERT INTO api_quota (id, requests_remaining, requests_used, updated_at)
-		VALUES (1, $1, $2, NOW())
+		VALUES (1, $1, $2, timezone('UTC', NOW()))
 		ON CONFLICT (id) DO UPDATE SET
 			requests_remaining = EXCLUDED.requests_remaining,
 			requests_used = EXCLUDED.requests_used,
-			updated_at = NOW()
+			updated_at = timezone('UTC', NOW())
 	`
 
 	_, err := p.db.ExecContext(ctx, query, remaining, used)

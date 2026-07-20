@@ -304,7 +304,8 @@ func runBacktest(c *cli.Context) error {
 		analysisCfg.ModelType = model
 	}
 
-	end := time.Now()
+	// UTC to match commence_time's UTC wall clock in the range query.
+	end := time.Now().UTC()
 	start := end.AddDate(0, 0, -c.Int("days"))
 
 	result, err := analysis.RunBacktest(db, analysisCfg, cfg.Trading, c.String("sport"), start, end, c.Float64("bankroll"))
