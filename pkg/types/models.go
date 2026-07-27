@@ -256,3 +256,14 @@ func (t *TeamStats) CalcWinRate() float64 {
 	}
 	return float64(t.Wins) / float64(total)
 }
+
+// ConsensusNotification records one Discord push for a game's consensus
+// pick — the notifier's dedup ledger (max two rows per game: the initial
+// message and the strong upgrade).
+type ConsensusNotification struct {
+	ID        int       `json:"id" db:"id"`
+	GameID    string    `json:"game_id" db:"game_id"`
+	Selection string    `json:"selection" db:"selection"`
+	Strong    bool      `json:"strong" db:"strong"`
+	SentAt    time.Time `json:"sent_at" db:"sent_at"`
+}

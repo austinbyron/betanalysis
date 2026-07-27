@@ -11,6 +11,7 @@ import (
 
 	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/config"
+	"github.com/austinbyron/betanalysis/internal/consensus"
 	"github.com/austinbyron/betanalysis/internal/contenders"
 	"github.com/austinbyron/betanalysis/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -180,93 +181,6 @@ func (s *Server) gameURL(game types.Game) string {
 	return s.linker.GameURL(game)
 }
 
-// modelPick is one contender's opinion on one game, input to consensus
-type modelPick struct {
-	Model     string
-	Selection string
-	Prob      float64
-	EV        float64
-	Odds      float64
-	Bookmaker string
-}
-
-// gamePicks collects every contender's pick for one game
-type gamePicks struct {
-	Game  types.Game
-	Picks []modelPick
-}
-
-// consensusPick is a game where most of the lineup backs the same side —
-// the informational shortlist for occasional real-money bets. The paper
-// engines bet independently; this is a lens, not a fifth bettor.
-type consensusPick struct {
-	Game      types.Game
-	GameURL   string
-	Selection string
-	Votes     int
-	Total     int     // lineup size
-	AvgProb   float64 // mean probability among agreeing picks
-	MinEV     float64 // worst EV among agreeing picks
-	BestOdds  float64 // best price among agreeing picks
-	BestBook  string
-	Picks     []modelPick // the agreeing picks
-	Strong    bool        // every contender agrees and MinEV clears the threshold
-}
-
-// buildConsensus filters games where at least 3 contenders back the same
-// side. Sorted by votes then average probability, both descending.
-func buildConsensus(games map[string]gamePicks, total int, minEV float64) []consensusPick {
-	var out []consensusPick
-	for _, gp := range games {
-		bySide := make(map[string][]modelPick)
-		for _, p := range gp.Picks {
-			bySide[p.Selection] = append(bySide[p.Selection], p)
-		}
-
-		var side string
-		var agreeing []modelPick
-		for sel, ps := range bySide {
-			if len(ps) > len(agreeing) {
-				side, agreeing = sel, ps
-			}
-		}
-		if len(agreeing) < 3 {
-			continue
-		}
-
-		cp := consensusPick{
-			Game:      gp.Game,
-			Selection: side,
-			Votes:     len(agreeing),
-			Total:     total,
-			MinEV:     agreeing[0].EV,
-			Picks:     agreeing,
-		}
-		var probSum float64
-		for _, p := range agreeing {
-			probSum += p.Prob
-			if p.EV < cp.MinEV {
-				cp.MinEV = p.EV
-			}
-			if p.Odds > cp.BestOdds {
-				cp.BestOdds = p.Odds
-				cp.BestBook = p.Bookmaker
-			}
-		}
-		cp.AvgProb = probSum / float64(len(agreeing))
-		cp.Strong = cp.Votes == total && cp.MinEV >= minEV
-		out = append(out, cp)
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Votes != out[j].Votes {
-			return out[i].Votes > out[j].Votes
-		}
-		return out[i].AvgProb > out[j].AvgProb
-	})
-	return out
-}
-
 type betRow struct {
 	Bet     types.Bet
 	Game    *types.Game
@@ -316,7 +230,7 @@ type leaderRow struct {
 type dashboardData struct {
 	Models          []string // lineup names in slot order, for the filter chips
 	Leaderboard     []leaderRow
-	Consensus       []consensusPick
+	Consensus       []consensus.Pick
 	Recommendations []recommendation
 	Previews        []previewRow // warmup-suppressed picks, never placed
 	Shadow          []shadowRow  // settled-preview records per model
@@ -380,12 +294,12 @@ func (s *Server) buildDashboard() dashboardData {
 		portfolios[row.Name] = row.Portfolio
 	}
 
-	var picks map[string]gamePicks
+	var picks map[string]consensus.GamePicks
 	data.Recommendations, picks = s.buildRecommendations(portfolios)
 	// Consensus needs a real panel — with fewer than 3 contenders the
 	// section stays hidden.
 	if len(s.lineup) >= 3 {
-		data.Consensus = buildConsensus(picks, len(s.lineup), s.cfg.Trading.MinExpectedValue)
+		data.Consensus = consensus.Build(picks, len(s.lineup), s.cfg.Trading.MinExpectedValue)
 		for i := range data.Consensus {
 			data.Consensus[i].GameURL = s.gameURL(data.Consensus[i].Game)
 		}
@@ -482,10 +396,10 @@ func (s *Server) buildPreviews() ([]previewRow, []shadowRow) {
 // deliberately stay out of both: the preview section reads the persisted
 // rows the trading cycle recorded, and the real-money consensus shortlist
 // only ever reflects models trusted enough to bet.
-func (s *Server) buildRecommendations(portfolios map[string]*types.Portfolio) ([]recommendation, map[string]gamePicks) {
+func (s *Server) buildRecommendations(portfolios map[string]*types.Portfolio) ([]recommendation, map[string]consensus.GamePicks) {
 	const maxGamesPerSport = 25
 	var recs []recommendation
-	picks := make(map[string]gamePicks)
+	picks := make(map[string]consensus.GamePicks)
 
 	for _, sport := range s.cfg.Sports() {
 		games, err := s.store.GetUpcomingGames(sport)
@@ -550,7 +464,7 @@ func (s *Server) buildRecommendations(portfolios map[string]*types.Portfolio) ([
 
 				gp := picks[game.ID]
 				gp.Game = game
-				gp.Picks = append(gp.Picks, modelPick{
+				gp.Picks = append(gp.Picks, consensus.ModelPick{
 					Model:     c.Name,
 					Selection: bet.Selection,
 					Prob:      bet.Probability,

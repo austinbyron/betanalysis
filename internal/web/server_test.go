@@ -1,7 +1,6 @@
 package web
 
 import (
-	"math"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -485,47 +484,6 @@ func TestDashboardCarriesFilterAndSortMarkup(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard missing %q", want)
 		}
-	}
-}
-
-func TestBuildConsensus(t *testing.T) {
-	g := types.Game{ID: "g1", HomeTeam: "H", AwayTeam: "A"}
-	pick := func(model, sel string, prob, ev float64) modelPick {
-		return modelPick{Model: model, Selection: sel, Prob: prob, EV: ev, Odds: 2.0, Bookmaker: "dk"}
-	}
-
-	games := map[string]gamePicks{
-		"g1": {Game: g, Picks: []modelPick{ // 4/4 home, strong
-			pick("a", "home", 0.60, 0.20), pick("b", "home", 0.58, 0.16),
-			pick("c", "home", 0.62, 0.24), pick("d", "home", 0.55, 0.10),
-		}},
-		"g2": {Game: types.Game{ID: "g2"}, Picks: []modelPick{ // 3/4 home, not strong
-			pick("a", "home", 0.60, 0.20), pick("b", "home", 0.58, 0.16),
-			pick("c", "home", 0.62, 0.24), pick("d", "away", 0.55, 0.10),
-		}},
-		"g3": {Game: types.Game{ID: "g3"}, Picks: []modelPick{ // 2/4 votes, excluded
-			pick("a", "home", 0.60, 0.20), pick("b", "home", 0.58, 0.16),
-		}},
-	}
-
-	got := buildConsensus(games, 4, 0.05)
-	if len(got) != 2 {
-		t.Fatalf("consensus picks = %d, want 2", len(got))
-	}
-	if got[0].Game.ID != "g1" || got[0].Votes != 4 || !got[0].Strong {
-		t.Errorf("g1 = %+v, want 4/4 strong", got[0])
-	}
-	if math.Abs(got[0].AvgProb-0.5875) > 1e-9 {
-		t.Errorf("avg prob = %v, want 0.5875", got[0].AvgProb)
-	}
-	if got[1].Game.ID != "g2" || got[1].Votes != 3 || got[1].Strong {
-		t.Errorf("g2 = %+v, want 3/4 not strong", got[1])
-	}
-	if got[1].Selection != "home" {
-		t.Errorf("majority side = %q, want home", got[1].Selection)
-	}
-	if got[1].MinEV != 0.16 {
-		t.Errorf("min EV = %v, want 0.16 (among agreeing picks)", got[1].MinEV)
 	}
 }
 

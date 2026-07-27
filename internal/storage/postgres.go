@@ -950,3 +950,39 @@ func (p *PostgresDB) GetTeamStatsByName(teamName string) (*types.TeamStats, erro
 
 	return &stats, nil
 }
+
+// GetConsensusNotifications returns the notification ledger for a game,
+// oldest first, so the first row is the originally-notified selection.
+func (p *PostgresDB) GetConsensusNotifications(gameID string) ([]types.ConsensusNotification, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var rows []types.ConsensusNotification
+	query := `
+		SELECT id, game_id, selection, strong, sent_at
+		FROM consensus_notifications WHERE game_id = $1
+		ORDER BY sent_at, id
+	`
+	if err := p.db.SelectContext(ctx, &rows, query, gameID); err != nil {
+		return nil, fmt.Errorf("failed to get consensus notifications: %w", err)
+	}
+	return rows, nil
+}
+
+// SaveConsensusNotification appends one row to the notification ledger.
+// Call only after Discord accepted the message — a failed send must leave
+// no row so the next cycle retries.
+func (p *PostgresDB) SaveConsensusNotification(gameID, selection string, strong bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	query := `
+		INSERT INTO consensus_notifications (game_id, selection, strong, sent_at)
+		VALUES ($1, $2, $3, timezone('UTC', NOW()))
+	`
+	_, err := p.db.ExecContext(ctx, query, gameID, selection, strong)
+	if err != nil {
+		return fmt.Errorf("failed to save consensus notification: %w", err)
+	}
+	return nil
+}

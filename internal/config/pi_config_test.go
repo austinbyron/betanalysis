@@ -85,3 +85,13 @@ func TestPiConfigFallLineup(t *testing.T) {
 		}
 	}
 }
+
+func TestPiConfigNotifyEnabled(t *testing.T) {
+	cfg := loadPiConfig(t)
+	if !cfg.Notify.Enabled {
+		t.Error("pi config: notify.enabled = false, want true")
+	}
+	if cfg.Notify.BaseURL != "http://betanalysis.homelab" {
+		t.Errorf("pi config: notify.base_url = %q", cfg.Notify.BaseURL)
+	}
+}

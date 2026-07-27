@@ -10,8 +10,10 @@ import (
 	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/api"
 	"github.com/austinbyron/betanalysis/internal/config"
+	"github.com/austinbyron/betanalysis/internal/consensus"
 	"github.com/austinbyron/betanalysis/internal/contenders"
 	"github.com/austinbyron/betanalysis/internal/espn"
+	"github.com/austinbyron/betanalysis/internal/notify"
 	"github.com/austinbyron/betanalysis/internal/priors"
 	"github.com/austinbyron/betanalysis/internal/scheduler"
 	"github.com/austinbyron/betanalysis/internal/storage"
@@ -75,6 +77,15 @@ func main() {
 
 	go runTradingCycles(ctx, engines, cfg)
 	go runSettlementCycles(ctx, db)
+
+	if cfg.Notify.Enabled {
+		if webhook := os.Getenv("BETANALYSIS_DISCORD_WEBHOOK"); webhook != "" {
+			notifier := notify.New(db, notify.NewDiscord(webhook), cfg.Notify.BaseURL)
+			go runNotifyCycles(ctx, notifier, db, lineup, cfg)
+		} else {
+			log.Warn().Msg("notify.enabled is set but BETANALYSIS_DISCORD_WEBHOOK is empty — notifications off")
+		}
+	}
 
 	var dashboard *web.Server
 	if cfg.Server.Enabled {
@@ -156,6 +167,26 @@ func runSettlementCycles(ctx context.Context, db *storage.PostgresDB) {
 			if err := settler.SettleBets(); err != nil {
 				log.Error().Err(err).Msg("Settlement cycle failed")
 			}
+		}
+	}
+}
+
+func runNotifyCycles(ctx context.Context, n *notify.Notifier, db *storage.PostgresDB,
+	lineup []contenders.Contender, cfg *config.Config) {
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	run := func() {
+		n.Process(consensus.Compute(db, lineup, cfg))
+	}
+	run()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
 		}
 	}
 }

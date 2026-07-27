@@ -50,3 +50,20 @@ func TestContendersReturnsConfiguredList(t *testing.T) {
 		t.Fatalf("contenders = %+v", got)
 	}
 }
+
+func TestLoadNotifyDefaults(t *testing.T) {
+	t.Setenv("ODDS_API_KEY", "test-key")
+	t.Setenv("HOME", t.TempDir()) // keep Load() away from ~/.betanalysis
+	t.Chdir(t.TempDir())          // no config.yaml -> pure defaults
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Notify.Enabled {
+		t.Error("notify.enabled default = true, want false")
+	}
+	if cfg.Notify.BaseURL != "http://betanalysis.homelab" {
+		t.Errorf("notify.base_url default = %q", cfg.Notify.BaseURL)
+	}
+}

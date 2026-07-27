@@ -15,6 +15,7 @@ type Config struct {
 	Analysis  AnalysisConfig  `mapstructure:"analysis"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
 	Server    ServerConfig    `mapstructure:"server"`
+	Notify    NotifyConfig    `mapstructure:"notify"`
 	SportKeys []string        `mapstructure:"sports"`
 }
 
@@ -121,6 +122,14 @@ type ServerConfig struct {
 	Port    int  `mapstructure:"port"`
 }
 
+// NotifyConfig controls Discord consensus notifications. The webhook URL
+// itself is deliberately NOT here — the daemon reads it straight from the
+// BETANALYSIS_DISCORD_WEBHOOK env var so it can never land in yaml.
+type NotifyConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	BaseURL string `mapstructure:"base_url"`
+}
+
 func Load() (*Config, error) {
 	v := viper.New()
 
@@ -157,6 +166,9 @@ func Load() (*Config, error) {
 
 	v.SetDefault("server.enabled", true)
 	v.SetDefault("server.port", 8090)
+
+	v.SetDefault("notify.enabled", false)
+	v.SetDefault("notify.base_url", "http://betanalysis.homelab")
 
 	v.SetDefault("sports", []string{
 		"americanfootball_nfl",

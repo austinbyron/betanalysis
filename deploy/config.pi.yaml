@@ -93,3 +93,7 @@ sports:
   - americanfootball_ncaaf
   # Winter candidates (each needs a collect_crons entry sized to the API
   # tier): basketball_nba, basketball_ncaab
+
+notify:
+  enabled: true
+  base_url: http://betanalysis.homelab
