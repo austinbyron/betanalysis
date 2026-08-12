@@ -120,6 +120,52 @@
 </section>
 {{ end }}
 
+{{ if .ConsensusRecord }}
+<section>
+  <h2>Consensus record <span class="hint">how the shortlist has done — flat {{ money .ConsensusRecord.Stake }} per pick at first-seen best odds; voids excluded from W–L</span></h2>
+  <div class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>Picks</th><th class="num">Record</th><th class="num">P/L</th>
+        <th class="num">ROI</th><th class="num">Pending</th>
+      </tr></thead>
+      <tbody>
+      {{ range .ConsensusRecord.Lines }}
+      <tr {{ if eq .Label "Strong" }}class="strong-consensus"{{ end }}>
+        <td class="pick" data-th="Picks">{{ .Label }}</td>
+        <td class="num" data-th="Record">{{ if .HasSettled }}{{ .Won }}–{{ .Lost }}{{ else }}—{{ end }}</td>
+        <td class="num {{ if .ProfitPositive }}good{{ else }}bad{{ end }}" data-th="P/L">{{ if .HasSettled }}{{ signed .Profit }}{{ else }}—{{ end }}</td>
+        <td class="num" data-th="ROI">{{ if .HasSettled }}{{ pct .ROI }}{{ else }}—{{ end }}</td>
+        <td class="num" data-th="Pending">{{ .Pending }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ if .ConsensusRecord.Recent }}
+    <table>
+      <thead><tr>
+        <th>Settled</th><th>Game</th><th>Pick</th><th class="num">Agreement</th>
+        <th class="num">Odds</th><th class="num">P/L</th><th>Result</th>
+      </tr></thead>
+      <tbody>
+      {{ range .ConsensusRecord.Recent }}
+      <tr>
+        <td data-th="Settled">{{ .Settled }}</td>
+        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td class="pick" data-th="Pick">{{ .Pick }} ML{{ if .Strong }} <span class="badge-strong">strong</span>{{ end }}</td>
+        <td class="num" data-th="Agreement">{{ .Agreement }}</td>
+        <td class="num" data-th="Odds">{{ odds .P.BestOdds }} <span class="hint">{{ .P.BestBook }}</span></td>
+        <td class="num {{ if .Void }}{{ else if .Won }}good{{ else }}bad{{ end }}" data-th="P/L">{{ signed .Pnl }}</td>
+        <td data-th="Result">{{ if .Void }}<span class="result-void">Void ↩</span>{{ else if .Won }}<span class="result-won">Won ✓</span>{{ else }}<span class="result-lost">Lost ✕</span>{{ end }}</td>
+      </tr>
+      {{ end }}
+      </tbody>
+    </table>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+
 <section>
   <h2>Recommendations <span class="hint">each model's posterior-mean pick — stable between refreshes; live betting samples around it</span></h2>
   <div class="card table-wrap">

@@ -133,8 +133,8 @@ func (p *PostgresDB) GetFinishedGames(sportKey string, start, end time.Time) ([]
 }
 
 // GetStaleScheduledGames returns games still 'scheduled' past the given
-// cutoff that a pending bet or preview bet is waiting on — games the odds
-// feed abandoned (event id churn on reschedules, postponements).
+// cutoff that a pending bet, preview bet, or consensus pick is waiting on —
+// games the odds feed abandoned (event id churn on reschedules, postponements).
 func (p *PostgresDB) GetStaleScheduledGames(before time.Time) ([]types.Game, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -145,7 +145,8 @@ func (p *PostgresDB) GetStaleScheduledGames(before time.Time) ([]types.Game, err
 		FROM games g
 		WHERE g.status = 'scheduled' AND g.commence_time < $1
 			AND (EXISTS (SELECT 1 FROM bets b WHERE b.game_id = g.id AND b.status = 'pending')
-				OR EXISTS (SELECT 1 FROM preview_bets pb WHERE pb.game_id = g.id AND pb.status = 'pending'))
+				OR EXISTS (SELECT 1 FROM preview_bets pb WHERE pb.game_id = g.id AND pb.status = 'pending')
+				OR EXISTS (SELECT 1 FROM consensus_picks cp WHERE cp.game_id = g.id AND cp.status = 'pending'))
 		ORDER BY commence_time ASC
 	`
 
@@ -985,4 +986,148 @@ func (p *PostgresDB) SaveConsensusNotification(gameID, selection string, strong 
 		return fmt.Errorf("failed to save consensus notification: %w", err)
 	}
 	return nil
+}
+
+// RecordConsensusPick inserts one consensus-record row. First write per
+// game wins: repeats, vote wobble, and side flips are silently ignored,
+// so the 30-minute cycle can re-record every pick it sees. Returns bool
+// indicating whether a row was actually inserted (false on a conflict no-op).
+func (p *PostgresDB) RecordConsensusPick(cp types.ConsensusPick) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	query := `
+		INSERT INTO consensus_picks (game_id, selection, votes, total, strong,
+			avg_prob, min_ev, best_odds, best_book, stake, status, backfilled, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		ON CONFLICT (game_id) DO NOTHING
+	`
+
+	result, err := p.db.ExecContext(ctx, query,
+		cp.GameID,
+		cp.Selection,
+		cp.Votes,
+		cp.Total,
+		cp.Strong,
+		cp.AvgProb,
+		cp.MinEV,
+		cp.BestOdds,
+		cp.BestBook,
+		cp.Stake,
+		cp.Status,
+		cp.Backfilled,
+		cp.CreatedAt,
+	)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
+}
+
+// UpgradeConsensusPickStrong stamps the moment a recorded pick upgraded
+// to Strong on the same side — mirroring the notifier's one follow-up
+// message. Returns bool indicating whether a row was actually updated;
+// No-op (returns false) if the pick was strong at capture, already upgraded,
+// settled, or the upgrade is for a different side.
+func (p *PostgresDB) UpgradeConsensusPickStrong(gameID, selection string, at time.Time) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	query := `
+		UPDATE consensus_picks SET upgraded_to_strong_at = $3
+		WHERE game_id = $1 AND selection = $2 AND strong = FALSE
+			AND upgraded_to_strong_at IS NULL AND status = 'pending'
+	`
+
+	result, err := p.db.ExecContext(ctx, query, gameID, selection, at)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
+}
+
+// GetPendingConsensusPicks returns ungraded consensus-record rows
+func (p *PostgresDB) GetPendingConsensusPicks() ([]types.ConsensusPick, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var picks []types.ConsensusPick
+	query := `
+		SELECT id, game_id, selection, votes, total, strong, upgraded_to_strong_at,
+			avg_prob, min_ev, best_odds, best_book, stake, status, pnl, backfilled,
+			created_at, settled_at
+		FROM consensus_picks WHERE status = 'pending'
+	`
+
+	if err := p.db.SelectContext(ctx, &picks, query); err != nil {
+		return nil, fmt.Errorf("failed to get pending consensus picks: %w", err)
+	}
+
+	return picks, nil
+}
+
+// GetSettledConsensusPicks returns graded consensus-record rows (voids
+// included — the dashboard shows them but keeps them out of W–L), oldest
+// settled first.
+func (p *PostgresDB) GetSettledConsensusPicks() ([]types.ConsensusPick, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var picks []types.ConsensusPick
+	query := `
+		SELECT id, game_id, selection, votes, total, strong, upgraded_to_strong_at,
+			avg_prob, min_ev, best_odds, best_book, stake, status, pnl, backfilled,
+			created_at, settled_at
+		FROM consensus_picks
+		WHERE status IN ('won', 'lost', 'void') AND settled_at IS NOT NULL
+		ORDER BY settled_at ASC
+	`
+
+	if err := p.db.SelectContext(ctx, &picks, query); err != nil {
+		return nil, fmt.Errorf("failed to get settled consensus picks: %w", err)
+	}
+
+	return picks, nil
+}
+
+// SettleConsensusPick grades one consensus-record row. No portfolio is
+// touched: the record is a lens, not a bettor.
+func (p *PostgresDB) SettleConsensusPick(cp types.ConsensusPick) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	query := `
+		UPDATE consensus_picks SET status = $2, pnl = $3, settled_at = $4
+		WHERE id = $1
+	`
+
+	_, err := p.db.ExecContext(ctx, query, cp.ID, cp.Status, cp.Pnl, cp.SettledAt)
+	return err
+}
+
+// GetAllConsensusNotifications returns the whole Discord dedup ledger,
+// oldest first — the backfill's replay source.
+func (p *PostgresDB) GetAllConsensusNotifications() ([]types.ConsensusNotification, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var rows []types.ConsensusNotification
+	query := `
+		SELECT id, game_id, selection, strong, sent_at
+		FROM consensus_notifications ORDER BY sent_at ASC
+	`
+
+	if err := p.db.SelectContext(ctx, &rows, query); err != nil {
+		return nil, fmt.Errorf("failed to get consensus notifications: %w", err)
+	}
+
+	return rows, nil
 }

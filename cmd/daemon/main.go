@@ -78,14 +78,17 @@ func main() {
 	go runTradingCycles(ctx, engines, cfg)
 	go runSettlementCycles(ctx, db)
 
+	// The consensus cycle always runs: it records the shortlist's track
+	// record even when Discord notifications are off.
+	var notifier *notify.Notifier
 	if cfg.Notify.Enabled {
 		if webhook := os.Getenv("BETANALYSIS_DISCORD_WEBHOOK"); webhook != "" {
-			notifier := notify.New(db, notify.NewDiscord(webhook), cfg.Notify.BaseURL)
-			go runNotifyCycles(ctx, notifier, db, lineup, cfg)
+			notifier = notify.New(db, notify.NewDiscord(webhook), cfg.Notify.BaseURL)
 		} else {
 			log.Warn().Msg("notify.enabled is set but BETANALYSIS_DISCORD_WEBHOOK is empty — notifications off")
 		}
 	}
+	go runConsensusCycles(ctx, notifier, db, lineup, cfg)
 
 	var dashboard *web.Server
 	if cfg.Server.Enabled {
@@ -171,13 +174,23 @@ func runSettlementCycles(ctx context.Context, db *storage.PostgresDB) {
 	}
 }
 
-func runNotifyCycles(ctx context.Context, n *notify.Notifier, db *storage.PostgresDB,
+// runConsensusCycles computes the consensus shortlist every 30 minutes,
+// records each pick's first appearance for the track record, and — when a
+// notifier is configured — pushes new picks to Discord. One Compute call
+// feeds both so they can never disagree.
+func runConsensusCycles(ctx context.Context, n *notify.Notifier, db *storage.PostgresDB,
 	lineup []contenders.Contender, cfg *config.Config) {
+	recorder := consensus.NewRecorder(db, cfg.Consensus.Stake)
+
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
 	run := func() {
-		n.Process(consensus.Compute(db, lineup, cfg))
+		picks := consensus.Compute(db, lineup, cfg)
+		recorder.Record(picks)
+		if n != nil {
+			n.Process(picks)
+		}
 	}
 	run()
 

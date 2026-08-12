@@ -267,3 +267,33 @@ type ConsensusNotification struct {
 	Strong    bool      `json:"strong" db:"strong"`
 	SentAt    time.Time `json:"sent_at" db:"sent_at"`
 }
+
+// ConsensusPick is one persisted row of the consensus record: the
+// shortlist pick as it first appeared (side, votes, best odds), graded
+// later at a flat notional stake. One row per game, first write wins.
+// Pointer fields are NULL on rows backfilled from the notification
+// ledger, which never stored them.
+type ConsensusPick struct {
+	ID                 int        `json:"id" db:"id"`
+	GameID             string     `json:"game_id" db:"game_id"`
+	Selection          string     `json:"selection" db:"selection"`
+	Votes              *int       `json:"votes,omitempty" db:"votes"`
+	Total              *int       `json:"total,omitempty" db:"total"`
+	Strong             bool       `json:"strong" db:"strong"`
+	UpgradedToStrongAt *time.Time `json:"upgraded_to_strong_at,omitempty" db:"upgraded_to_strong_at"`
+	AvgProb            *float64   `json:"avg_prob,omitempty" db:"avg_prob"`
+	MinEV              *float64   `json:"min_ev,omitempty" db:"min_ev"`
+	BestOdds           float64    `json:"best_odds" db:"best_odds"`
+	BestBook           string     `json:"best_book" db:"best_book"`
+	Stake              float64    `json:"stake" db:"stake"`
+	Status             string     `json:"status" db:"status"`
+	Pnl                *float64   `json:"pnl,omitempty" db:"pnl"`
+	Backfilled         bool       `json:"backfilled" db:"backfilled"`
+	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
+	SettledAt          *time.Time `json:"settled_at,omitempty" db:"settled_at"`
+}
+
+// IsStrong reports whether the pick was strong at capture or upgraded later
+func (c *ConsensusPick) IsStrong() bool {
+	return c.Strong || c.UpgradedToStrongAt != nil
+}

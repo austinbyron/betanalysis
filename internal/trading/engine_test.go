@@ -1,6 +1,7 @@
 package trading
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,13 +12,14 @@ import (
 
 // fakeStore is an in-memory Store
 type fakeStore struct {
-	games      []types.Game
-	odds       map[string][]types.GameOdds
-	portfolios map[string]types.Portfolio
-	bets       []types.Bet
-	previews   []types.PreviewBet
-	settled    int
-	onGetOdds  func() // runs mid-cycle, to interleave concurrent work
+	games          []types.Game
+	odds           map[string][]types.GameOdds
+	portfolios     map[string]types.Portfolio
+	bets           []types.Bet
+	previews       []types.PreviewBet
+	consensusPicks []types.ConsensusPick
+	settled        int
+	onGetOdds      func() // runs mid-cycle, to interleave concurrent work
 }
 
 func newFakeStore() *fakeStore {
@@ -135,6 +137,26 @@ func (f *fakeStore) SettlePreviewBet(pb types.PreviewBet) error {
 		}
 	}
 	return nil
+}
+
+func (f *fakeStore) GetPendingConsensusPicks() ([]types.ConsensusPick, error) {
+	var out []types.ConsensusPick
+	for _, cp := range f.consensusPicks {
+		if cp.Status == types.BetStatusPending {
+			out = append(out, cp)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) SettleConsensusPick(cp types.ConsensusPick) error {
+	for i := range f.consensusPicks {
+		if f.consensusPicks[i].ID == cp.ID {
+			f.consensusPicks[i] = cp
+			return nil
+		}
+	}
+	return fmt.Errorf("consensus pick %d not found", cp.ID)
 }
 
 // fixedStats always reports the given record for every team
@@ -470,5 +492,41 @@ func TestSettlerSettlesPreviewsWithoutTouchingPortfolio(t *testing.T) {
 	p, _ := store.GetPortfolio("default")
 	if p.Balance != 1000 || p.BetsWon != 0 || p.BetsLost != 0 {
 		t.Errorf("portfolio touched by preview settlement: %+v", p)
+	}
+}
+
+func TestSettleConsensusPicks(t *testing.T) {
+	home, away := 5, 3
+	store := &fakeStore{
+		games: []types.Game{{
+			ID: "g1", HomeTeam: "Home", AwayTeam: "Away",
+			HomeScore: &home, AwayScore: &away, Status: "finished",
+		}},
+		consensusPicks: []types.ConsensusPick{
+			{ID: 1, GameID: "g1", Selection: types.OutcomeHome, BestOdds: 3.0, Stake: 5, Status: types.BetStatusPending},
+			{ID: 2, GameID: "g1", Selection: types.OutcomeAway, BestOdds: 2.0, Stake: 5, Status: types.BetStatusPending},
+			{ID: 3, GameID: "pending-game", Selection: types.OutcomeHome, BestOdds: 2.0, Stake: 5, Status: types.BetStatusPending},
+		},
+	}
+
+	if err := NewSettler(store).SettleBets(); err != nil {
+		t.Fatalf("SettleBets: %v", err)
+	}
+
+	won := store.consensusPicks[0]
+	if won.Status != types.BetStatusWon || won.Pnl == nil || *won.Pnl != 10.0 {
+		t.Errorf("winner: %+v (want won, pnl +10 = 5 x (3.0-1))", won)
+	}
+	if won.SettledAt == nil {
+		t.Error("winner missing settled_at")
+	}
+
+	lost := store.consensusPicks[1]
+	if lost.Status != types.BetStatusLost || lost.Pnl == nil || *lost.Pnl != -5.0 {
+		t.Errorf("loser: %+v (want lost, pnl -5)", lost)
+	}
+
+	if store.consensusPicks[2].Status != types.BetStatusPending {
+		t.Errorf("unfinished game's pick must stay pending: %+v", store.consensusPicks[2])
 	}
 }

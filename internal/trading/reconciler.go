@@ -98,6 +98,11 @@ func (r *Reconciler) resolve(game types.Game, res espn.Result) {
 			log.Error().Err(err).Str("preview", pb.ID).Msg("Failed to settle reconciled preview")
 		}
 	}
+	for _, cp := range r.pendingConsensusPicks(game.ID) {
+		if err := settleConsensusAgainst(r.store, cp, &decided); err != nil {
+			log.Error().Err(err).Str("consensus_pick", cp.GameID).Msg("Failed to settle reconciled consensus pick")
+		}
+	}
 
 	if err := r.store.UpdateGameScores(game.ID, res.HomeScore, res.AwayScore, "superseded"); err != nil {
 		log.Error().Err(err).Str("game", game.ID).Msg("Failed to mark game superseded")
@@ -141,6 +146,17 @@ func (r *Reconciler) void(game types.Game, reason string) {
 		}
 	}
 
+	for _, cp := range r.pendingConsensusPicks(game.ID) {
+		zero := 0.0
+		now := time.Now()
+		cp.Status = types.BetStatusVoid
+		cp.Pnl = &zero
+		cp.SettledAt = &now
+		if err := r.store.SettleConsensusPick(cp); err != nil {
+			log.Error().Err(err).Str("consensus_pick", cp.GameID).Msg("Failed to void consensus pick")
+		}
+	}
+
 	if err := r.store.UpdateGameScores(game.ID, 0, 0, "postponed"); err != nil {
 		log.Error().Err(err).Str("game", game.ID).Msg("Failed to mark game postponed")
 	}
@@ -171,6 +187,21 @@ func (r *Reconciler) pendingPreviews(gameID string) []types.PreviewBet {
 	for _, pb := range all {
 		if pb.GameID == gameID {
 			out = append(out, pb)
+		}
+	}
+	return out
+}
+
+func (r *Reconciler) pendingConsensusPicks(gameID string) []types.ConsensusPick {
+	all, err := r.store.GetPendingConsensusPicks()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get pending consensus picks")
+		return nil
+	}
+	var out []types.ConsensusPick
+	for _, cp := range all {
+		if cp.GameID == gameID {
+			out = append(out, cp)
 		}
 	}
 	return out

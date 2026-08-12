@@ -36,6 +36,11 @@ func (f *fakeStore) GetStaleScheduledGames(before time.Time) ([]types.Game, erro
 				referenced = true
 			}
 		}
+		for _, cp := range f.consensusPicks {
+			if cp.GameID == g.ID && cp.Status == types.BetStatusPending {
+				referenced = true
+			}
+		}
 		if referenced {
 			stale = append(stale, g)
 		}
@@ -241,5 +246,63 @@ func TestReconcileLeavesInProgressGameAlone(t *testing.T) {
 
 	if bet := store.bets[0]; bet.Status != types.BetStatusPending {
 		t.Errorf("bet status = %q, want still pending", bet.Status)
+	}
+}
+
+func TestReconcilerSettlesConsensusPickOnESPNResult(t *testing.T) {
+	// Consensus-only game: no pending bet or preview, so GetStaleScheduledGames
+	// must surface it solely because of the pending consensus pick.
+	stale := staleGame("g1", 24*time.Hour)
+	store := newFakeStore()
+	store.games = []types.Game{stale}
+	store.consensusPicks = []types.ConsensusPick{
+		{ID: 1, GameID: stale.ID, Selection: types.OutcomeHome, BestOdds: 2.5, Stake: 5, Status: types.BetStatusPending},
+	}
+
+	results := fakeResults{res: map[string]espn.Result{
+		stale.ID: {Status: espn.ResultFinal, HomeScore: 4, AwayScore: 2},
+	}}
+
+	if err := NewReconciler(store, results).ReconcileStaleBets(); err != nil {
+		t.Fatalf("ReconcileStaleBets: %v", err)
+	}
+
+	cp := store.consensusPicks[0]
+	if cp.Status != types.BetStatusWon || cp.Pnl == nil || *cp.Pnl != 7.5 {
+		t.Errorf("pick after ESPN final: %+v (want won, pnl +7.5)", cp)
+	}
+}
+
+func TestReconcilerVoidsConsensusPickOnPostponement(t *testing.T) {
+	stale := staleGame("g1", 24*time.Hour)
+	store := newFakeStore()
+	store.games = []types.Game{stale}
+	store.portfolios["p1"] = types.Portfolio{ID: "p1", Balance: 1000}
+	store.bets = []types.Bet{{
+		ID: "b1", PortfolioID: "p1", GameID: stale.ID,
+		Selection: types.OutcomeAway, Odds: 2.14, Stake: 20, PotentialWin: 22.8,
+		Status: types.BetStatusPending,
+	}}
+	store.consensusPicks = []types.ConsensusPick{
+		{ID: 1, GameID: stale.ID, Selection: types.OutcomeHome, BestOdds: 2.5, Stake: 5, Status: types.BetStatusPending},
+	}
+
+	results := fakeResults{res: map[string]espn.Result{
+		stale.ID: {Status: espn.ResultPostponed},
+	}}
+
+	if err := NewReconciler(store, results).ReconcileStaleBets(); err != nil {
+		t.Fatalf("ReconcileStaleBets: %v", err)
+	}
+
+	cp := store.consensusPicks[0]
+	if cp.Status != types.BetStatusVoid {
+		t.Errorf("status = %q, want void", cp.Status)
+	}
+	if cp.Pnl == nil || *cp.Pnl != 0 {
+		t.Errorf("void pnl = %v, want 0", cp.Pnl)
+	}
+	if cp.SettledAt == nil {
+		t.Error("void missing settled_at")
 	}
 }

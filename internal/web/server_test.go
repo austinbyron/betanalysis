@@ -13,17 +13,19 @@ import (
 )
 
 type fakeStore struct {
-	portfolios      map[string]*types.Portfolio
-	pending         []types.Bet
-	settled         []types.Bet
-	games           []types.Game
-	odds            map[string][]types.GameOdds
-	betExists       bool
-	pendingPreviews []types.PreviewBet
-	settledPreviews []types.PreviewBet
-	quota           *types.APIQuota
-	finished        map[string][]types.Game
-	teamStats       map[string][]types.TeamStats
+	portfolios       map[string]*types.Portfolio
+	pending          []types.Bet
+	settled          []types.Bet
+	games            []types.Game
+	odds             map[string][]types.GameOdds
+	betExists        bool
+	pendingPreviews  []types.PreviewBet
+	settledPreviews  []types.PreviewBet
+	quota            *types.APIQuota
+	finished         map[string][]types.Game
+	teamStats        map[string][]types.TeamStats
+	consensusPending []types.ConsensusPick
+	consensusSettled []types.ConsensusPick
 }
 
 func (f *fakeStore) GetPortfolio(id string) (*types.Portfolio, error) { return f.portfolios[id], nil }
@@ -54,6 +56,12 @@ func (f *fakeStore) FinishedGames(sport string) ([]types.Game, error) {
 }
 func (f *fakeStore) GetAllTeamStats(sport string) ([]types.TeamStats, error) {
 	return f.teamStats[sport], nil
+}
+func (f *fakeStore) GetPendingConsensusPicks() ([]types.ConsensusPick, error) {
+	return f.consensusPending, nil
+}
+func (f *fakeStore) GetSettledConsensusPicks() ([]types.ConsensusPick, error) {
+	return f.consensusSettled, nil
 }
 
 type fixedStats struct{}
@@ -629,5 +637,62 @@ func TestDashboardLinksToAnalysis(t *testing.T) {
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if !strings.Contains(rec.Body.String(), `href="/analysis"`) {
 		t.Fatal("dashboard must link to /analysis")
+	}
+}
+
+func TestDashboardConsensusRecord(t *testing.T) {
+	win, loss := 10.0, -5.0
+	votes5, votes4, total := 5, 4, 5
+	now := time.Now()
+	store := &fakeStore{odds: map[string][]types.GameOdds{}}
+	store.consensusSettled = []types.ConsensusPick{
+		{ID: 1, GameID: "g1", Selection: "home", Votes: &votes5, Total: &total, Strong: true,
+			BestOdds: 3.0, BestBook: "dk", Stake: 5, Status: types.BetStatusWon, Pnl: &win, SettledAt: &now},
+		{ID: 2, GameID: "g2", Selection: "away", Votes: &votes4, Total: &total,
+			BestOdds: 2.0, BestBook: "fd", Stake: 5, Status: types.BetStatusLost, Pnl: &loss, SettledAt: &now},
+		{ID: 3, GameID: "g3", Selection: "home", // backfilled: no votes
+			BestOdds: 2.0, BestBook: "fd", Stake: 5, Status: types.BetStatusWon, Pnl: &win, Backfilled: true, SettledAt: &now},
+	}
+	store.consensusPending = []types.ConsensusPick{
+		{ID: 4, GameID: "g4", Selection: "home", Votes: &votes4, Total: &total,
+			BestOdds: 2.2, BestBook: "dk", Stake: 5, Status: types.BetStatusPending},
+	}
+
+	srv := newTestServer(t, store)
+	_, body := render(t, srv, "/")
+
+	for _, want := range []string{
+		"Consensus record",
+		"2–1",        // all-picks W–L
+		"5/5", "4/5", // vote splits
+		"notified", // backfilled bucket label
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard missing %q", want)
+		}
+	}
+
+	// The strong pick (g1) is the OLDEST settled row, so it renders LAST in
+	// the Recent table (newest first). If the strong badge check panics the
+	// template mid-row, everything from that point on — including this
+	// row's own odds/book/result cells, plus the rest of the page — never
+	// renders. Assert on content that only exists past that point so a
+	// truncated response fails the test instead of silently passing.
+	if !strings.Contains(body, "dk") {
+		t.Error("dashboard missing g1's best-book cell — Recent table likely truncated at the strong-badge check")
+	}
+	if got := strings.Count(body, "Won ✓"); got != 2 {
+		t.Errorf(`"Won ✓" count = %d, want 2 (g1 and g3) — Recent table likely truncated`, got)
+	}
+	if !strings.Contains(body, "Lost ✕") {
+		t.Error("dashboard missing g2's Lost result badge")
+	}
+}
+
+func TestDashboardConsensusRecordHiddenWhenEmpty(t *testing.T) {
+	srv := newTestServer(t, &fakeStore{odds: map[string][]types.GameOdds{}})
+	_, body := render(t, srv, "/")
+	if strings.Contains(body, "Consensus record") {
+		t.Error("empty record must render no section")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/api"
 	"github.com/austinbyron/betanalysis/internal/config"
+	"github.com/austinbyron/betanalysis/internal/consensus"
 	"github.com/austinbyron/betanalysis/internal/espn"
 	"github.com/austinbyron/betanalysis/internal/mlb"
 	"github.com/austinbyron/betanalysis/internal/priors"
@@ -104,6 +105,12 @@ func main() {
 				Name:   "settle",
 				Usage:  "Settle completed bets",
 				Action: runSettle,
+			},
+			{
+				Name: "backfill-consensus",
+				Usage: "One-time: replay the Discord consensus ledger into the consensus " +
+					"record (odds reconstructed as of each ping), then settle finished picks",
+				Action: runBackfillConsensus,
 			},
 			{
 				Name: "seed-priors",
@@ -345,6 +352,36 @@ func runSettle(c *cli.Context) error {
 
 	// Heal bets whose odds-feed event vanished (reschedule id churn,
 	// postponements) — the scores path above can never settle those.
+	reconciler := trading.NewReconciler(db, espn.NewLinker())
+	return reconciler.ReconcileStaleBets()
+}
+
+// runBackfillConsensus seeds the consensus record from the notification
+// ledger (rows predate live recording), then runs a normal settlement
+// pass so finished picks grade immediately. Idempotent — the record's
+// first-write-wins insert makes re-runs harmless.
+func runBackfillConsensus(c *cli.Context) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	db, err := storage.NewPostgres(cfg.Database)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	created, upgraded, skipped, err := consensus.Backfill(db, cfg.Consensus.Stake)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Backfilled %d picks (%d strong upgrades, %d skipped)\n", created, upgraded, skipped)
+
+	settler := trading.NewSettler(db)
+	if err := settler.SettleBets(); err != nil {
+		return err
+	}
 	reconciler := trading.NewReconciler(db, espn.NewLinker())
 	return reconciler.ReconcileStaleBets()
 }

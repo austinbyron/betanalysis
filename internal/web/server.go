@@ -34,6 +34,8 @@ type Store interface {
 	GetAPIQuota() (*types.APIQuota, error)
 	FinishedGames(sportKey string) ([]types.Game, error)
 	GetAllTeamStats(sportKey string) ([]types.TeamStats, error)
+	GetPendingConsensusPicks() ([]types.ConsensusPick, error)
+	GetSettledConsensusPicks() ([]types.ConsensusPick, error)
 }
 
 // GameLinker resolves a game to an external detail page (ESPN gamecast).
@@ -173,6 +175,81 @@ type shadowRow struct {
 	ProfitPositive bool
 }
 
+// consensusPickRow is one settled consensus-record pick, joined to its game
+type consensusPickRow struct {
+	P       types.ConsensusPick
+	Game    *types.Game
+	GameURL string
+	Matchup string
+	Won     bool
+	Void    bool
+}
+
+// Pick names the selected team when the game is known
+func (r consensusPickRow) Pick() string {
+	if r.Game == nil {
+		return strings.ToUpper(r.P.Selection[:1]) + r.P.Selection[1:]
+	}
+	if r.P.Selection == types.OutcomeHome {
+		return r.Game.HomeTeam
+	}
+	return r.Game.AwayTeam
+}
+
+// Pnl returns the settled P/L, 0 while pending. html/template neither
+// dereferences pointer args to funcs nor prints *float64 usefully, so
+// the template goes through this.
+func (r consensusPickRow) Pnl() float64 {
+	if r.P.Pnl == nil {
+		return 0
+	}
+	return *r.P.Pnl
+}
+
+// Strong reports whether the pick was strong at capture or upgraded later.
+// html/template only sees the value type ConsensusPick on the P field, so
+// the pointer-receiver IsStrong method isn't in its method set — this
+// wrapper is what the template must call instead.
+func (r consensusPickRow) Strong() bool {
+	return r.P.IsStrong()
+}
+
+// Settled renders the settle date, or "" while pending.
+func (r consensusPickRow) Settled() string {
+	if r.P.SettledAt == nil {
+		return ""
+	}
+	return r.P.SettledAt.Local().Format("Jan 2")
+}
+
+// Agreement renders the vote count, or the backfilled bucket label for
+// ledger rows that never stored votes.
+func (r consensusPickRow) Agreement() string {
+	if r.P.Votes == nil || r.P.Total == nil {
+		return "notified"
+	}
+	return fmt.Sprintf("%d/%d", *r.P.Votes, *r.P.Total)
+}
+
+// recordLine is one split of the consensus record (all picks, strong
+// only, per vote count, backfilled)
+type recordLine struct {
+	Label          string
+	Won, Lost      int
+	Pending        int
+	Profit         float64
+	ProfitPositive bool
+	ROI            float64 // percent of settled stake
+	HasSettled     bool
+}
+
+// consensusRecord is the dashboard's shortlist track record
+type consensusRecord struct {
+	Stake  float64
+	Lines  []recordLine
+	Recent []consensusPickRow // newest settled first
+}
+
 // gameURL resolves a game's external link, tolerating a nil linker
 func (s *Server) gameURL(game types.Game) string {
 	if s.linker == nil {
@@ -231,6 +308,7 @@ type dashboardData struct {
 	Models          []string // lineup names in slot order, for the filter chips
 	Leaderboard     []leaderRow
 	Consensus       []consensus.Pick
+	ConsensusRecord *consensusRecord
 	Recommendations []recommendation
 	Previews        []previewRow // warmup-suppressed picks, never placed
 	Shadow          []shadowRow  // settled-preview records per model
@@ -304,6 +382,7 @@ func (s *Server) buildDashboard() dashboardData {
 			data.Consensus[i].GameURL = s.gameURL(data.Consensus[i].Game)
 		}
 	}
+	data.ConsensusRecord = s.buildConsensusRecord()
 	data.Previews, data.Shadow = s.buildPreviews()
 	data.ActiveBets, data.SettledBets = s.buildBetRows()
 	data.Equity = s.buildEquityChart()
@@ -385,6 +464,106 @@ func (s *Server) buildPreviews() ([]previewRow, []shadowRow) {
 	}
 
 	return rows, shadow
+}
+
+// buildConsensusRecord aggregates the persisted shortlist picks into the
+// record card: overall and split W–L / P&L at the flat notional stake.
+// Voids show in the recent list but stay out of every W–L and ROI.
+// Returns nil when nothing has ever been recorded, hiding the section.
+func (s *Server) buildConsensusRecord() *consensusRecord {
+	settled, err := s.store.GetSettledConsensusPicks()
+	if err != nil {
+		log.Error().Err(err).Msg("dashboard: settled consensus picks failed")
+	}
+	pending, err := s.store.GetPendingConsensusPicks()
+	if err != nil {
+		log.Error().Err(err).Msg("dashboard: pending consensus picks failed")
+	}
+	if len(settled) == 0 && len(pending) == 0 {
+		return nil
+	}
+
+	// Split keys: every pick lands in "All picks", strong picks also in
+	// "Strong", and each in its vote bucket ("5/5"…) or "notified" for
+	// backfilled rows whose votes the ledger never stored.
+	buckets := func(cp types.ConsensusPick) []string {
+		keys := []string{"All picks"}
+		if cp.IsStrong() {
+			keys = append(keys, "Strong")
+		}
+		if cp.Votes != nil && cp.Total != nil {
+			keys = append(keys, fmt.Sprintf("%d/%d", *cp.Votes, *cp.Total))
+		} else {
+			keys = append(keys, "notified")
+		}
+		return keys
+	}
+
+	lines := make(map[string]*recordLine)
+	line := func(key string) *recordLine {
+		if lines[key] == nil {
+			lines[key] = &recordLine{Label: key}
+		}
+		return lines[key]
+	}
+
+	var staked = make(map[string]float64) // settled stake per line, for ROI
+	for _, cp := range settled {
+		if cp.Status == types.BetStatusVoid {
+			continue
+		}
+		for _, key := range buckets(cp) {
+			l := line(key)
+			if cp.Status == types.BetStatusWon {
+				l.Won++
+			} else {
+				l.Lost++
+			}
+			if cp.Pnl != nil {
+				l.Profit += *cp.Pnl
+			}
+			staked[key] += cp.Stake
+		}
+	}
+	for _, cp := range pending {
+		for _, key := range buckets(cp) {
+			line(key).Pending++
+		}
+	}
+
+	rec := &consensusRecord{Stake: s.cfg.Consensus.Stake}
+	for _, key := range []string{"All picks", "Strong", "5/5", "4/5", "3/5", "notified"} {
+		l, ok := lines[key]
+		if !ok {
+			continue
+		}
+		l.ProfitPositive = l.Profit >= 0
+		l.HasSettled = l.Won+l.Lost > 0
+		if st := staked[key]; st > 0 {
+			l.ROI = l.Profit / st * 100
+		}
+		rec.Lines = append(rec.Lines, *l)
+	}
+
+	// Recent settled picks, newest first (store returns oldest first)
+	const maxRecent = 8
+	for i := len(settled) - 1; i >= 0 && len(rec.Recent) < maxRecent; i-- {
+		cp := settled[i]
+		row := consensusPickRow{
+			P:       cp,
+			Matchup: cp.GameID,
+			Won:     cp.Status == types.BetStatusWon,
+			Void:    cp.Status == types.BetStatusVoid,
+		}
+		if game, err := s.store.GetGameByID(cp.GameID); err == nil && game != nil {
+			row.Game = game
+			row.GameURL = s.gameURL(*game)
+			row.Matchup = fmt.Sprintf("%s @ %s", game.AwayTeam, game.HomeTeam)
+		}
+		rec.Recent = append(rec.Recent, row)
+	}
+
+	return rec
 }
 
 // buildRecommendations runs every contender read-only over upcoming games —

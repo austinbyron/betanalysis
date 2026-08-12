@@ -67,3 +67,17 @@ func TestLoadNotifyDefaults(t *testing.T) {
 		t.Errorf("notify.base_url default = %q", cfg.Notify.BaseURL)
 	}
 }
+
+func TestConsensusStakeDefault(t *testing.T) {
+	t.Setenv("ODDS_API_KEY", "test-key")
+	// Run from a directory with no config.yaml so defaults apply.
+	t.Chdir(t.TempDir())
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Consensus.Stake != 5.0 {
+		t.Errorf("consensus.stake default = %v, want 5.0", cfg.Consensus.Stake)
+	}
+}

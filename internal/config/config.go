@@ -16,6 +16,7 @@ type Config struct {
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
 	Server    ServerConfig    `mapstructure:"server"`
 	Notify    NotifyConfig    `mapstructure:"notify"`
+	Consensus ConsensusConfig `mapstructure:"consensus"`
 	SportKeys []string        `mapstructure:"sports"`
 }
 
@@ -130,6 +131,13 @@ type NotifyConfig struct {
 	BaseURL string `mapstructure:"base_url"`
 }
 
+// ConsensusConfig controls the consensus record — the persisted track
+// record of the "models that agree" shortlist. Stake is the flat notional
+// each pick risks; it sizes the record's P&L, never a portfolio.
+type ConsensusConfig struct {
+	Stake float64 `mapstructure:"stake"`
+}
+
 func Load() (*Config, error) {
 	v := viper.New()
 
@@ -169,6 +177,8 @@ func Load() (*Config, error) {
 
 	v.SetDefault("notify.enabled", false)
 	v.SetDefault("notify.base_url", "http://betanalysis.homelab")
+
+	v.SetDefault("consensus.stake", 5.0)
 
 	v.SetDefault("sports", []string{
 		"americanfootball_nfl",

@@ -26,6 +26,8 @@ type Store interface {
 	RecordPreviewBet(pb types.PreviewBet) error
 	GetPendingPreviewBets() ([]types.PreviewBet, error)
 	SettlePreviewBet(pb types.PreviewBet) error
+	GetPendingConsensusPicks() ([]types.ConsensusPick, error)
+	SettleConsensusPick(cp types.ConsensusPick) error
 	GetStaleScheduledGames(before time.Time) ([]types.Game, error)
 	UpdateGameScores(gameID string, homeScore, awayScore int, status string) error
 }
@@ -245,7 +247,10 @@ func (s *Settler) SettleBets() error {
 
 	log.Info().Int("settled", settled).Msg("Settlement complete")
 
-	return s.settlePreviews()
+	if err := s.settlePreviews(); err != nil {
+		return err
+	}
+	return s.settleConsensusPicks()
 }
 
 // settlePreviews resolves finished preview bets. Previews move no money —
@@ -276,6 +281,38 @@ func (s *Settler) settlePreviews() error {
 
 	if settled > 0 {
 		log.Info().Int("settled", settled).Msg("Preview settlement complete")
+	}
+	return nil
+}
+
+// settleConsensusPicks grades finished consensus-record rows. Like
+// previews they move no money — the record is a lens on the shortlist.
+func (s *Settler) settleConsensusPicks() error {
+	picks, err := s.store.GetPendingConsensusPicks()
+	if err != nil {
+		return fmt.Errorf("failed to get pending consensus picks: %w", err)
+	}
+
+	settled := 0
+	for _, cp := range picks {
+		game, err := s.store.GetGameByID(cp.GameID)
+		if err != nil {
+			log.Error().Err(err).Str("consensus_pick", cp.GameID).Msg("Failed to get game")
+			continue
+		}
+		if game == nil || !game.IsFinished() {
+			continue
+		}
+
+		if err := settleConsensusAgainst(s.store, cp, game); err != nil {
+			log.Error().Err(err).Str("consensus_pick", cp.GameID).Msg("Failed to settle consensus pick")
+			continue
+		}
+		settled++
+	}
+
+	if settled > 0 {
+		log.Info().Int("settled", settled).Msg("Consensus pick settlement complete")
 	}
 	return nil
 }
@@ -330,6 +367,25 @@ func settlePreviewAgainst(store Store, pb types.PreviewBet, game *types.Game) er
 	pb.SettledAt = &now
 
 	return store.SettlePreviewBet(pb)
+}
+
+// settleConsensusAgainst grades one consensus pick against a decided game
+// at its recorded best odds and flat notional stake.
+func settleConsensusAgainst(store Store, cp types.ConsensusPick, game *types.Game) error {
+	var pnl float64
+	if selectionWon(cp.Selection, game) {
+		pnl = cp.Stake * (cp.BestOdds - 1)
+		cp.Status = types.BetStatusWon
+	} else {
+		pnl = -cp.Stake
+		cp.Status = types.BetStatusLost
+	}
+
+	now := time.Now()
+	cp.Pnl = &pnl
+	cp.SettledAt = &now
+
+	return store.SettleConsensusPick(cp)
 }
 
 // selectionWon reports whether a moneyline selection won a finished game
