@@ -16,6 +16,14 @@
   <span class="meta"><a href="/analysis" style="color: inherit;">analysis →</a></span>
 </header>
 
+{{ if gt (len .Sports) 1 }}
+<div class="filters" id="sport-filter" role="group" aria-label="Filter tables by sport">
+  <button class="filter-chip active" data-sport="all">All sports</button>
+  {{ range .Sports }}
+  <button class="filter-chip" data-sport="{{ . }}">{{ sport . }}</button>
+  {{ end }}
+</div>
+{{ end }}
 {{ if gt (len .Models) 1 }}
 <div class="filters" id="model-filter" role="group" aria-label="Filter tables by model">
   <button class="filter-chip active" data-model="all">All models</button>
@@ -37,7 +45,7 @@
       </tr></thead>
       <tbody>
       {{ range .Leaderboard }}
-      <tr data-model="{{ .Name }}" data-dim-only>
+      <tr data-model="{{ .Name }}" data-sport="{{ .Sports }}" data-dim-only>
         <td class="pick cell-wide">{{ .Name }}</td>
         <td class="num" data-th="Balance">{{ money .Portfolio.Balance }}</td>
         <td class="num {{ if .ProfitPositive }}good{{ else }}bad{{ end }}" data-th="P/L">{{ signed .Portfolio.TotalProfitLoss }}</td>
@@ -103,8 +111,8 @@
       </tr></thead>
       <tbody>
       {{ range .Consensus }}
-      <tr {{ if .Strong }}class="strong-consensus"{{ end }}>
-        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</a>{{ else }}{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}{{ end }}</td>
+      <tr data-sport="{{ .Game.SportKey }}" {{ if .Strong }}class="strong-consensus"{{ end }}>
+        <td class="cell-wide"><span class="sport-tag">{{ sport .Game.SportKey }}</span>{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</a>{{ else }}{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}{{ end }}</td>
         <td data-th="Starts">{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}</td>
         <td class="pick" data-th="Pick">{{ if eq .Selection "home" }}{{ .Game.HomeTeam }}{{ else }}{{ .Game.AwayTeam }}{{ end }} ML
             {{ if .Strong }}<span class="badge-strong">strong</span>{{ end }}</td>
@@ -149,9 +157,9 @@
       </tr></thead>
       <tbody>
       {{ range .ConsensusRecord.Recent }}
-      <tr>
+      <tr data-sport="{{ if .Game }}{{ .Game.SportKey }}{{ end }}">
         <td data-th="Settled">{{ .Settled }}</td>
-        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td class="cell-wide">{{ if .Game }}<span class="sport-tag">{{ sport .Game.SportKey }}</span>{{ end }}{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
         <td class="pick" data-th="Pick">{{ .Pick }} ML{{ if .Strong }} <span class="badge-strong">strong</span>{{ end }}</td>
         <td class="num" data-th="Agreement">{{ .Agreement }}</td>
         <td class="num" data-th="Odds">{{ odds .P.BestOdds }} <span class="hint">{{ .P.BestBook }}</span></td>
@@ -177,9 +185,9 @@
       </tr></thead>
       <tbody>
       {{ range .Recommendations }}
-      <tr data-model="{{ .Model }}">
+      <tr data-model="{{ .Model }}" data-sport="{{ .Game.SportKey }}">
         <td class="pick" data-th="Model">{{ .Model }}</td>
-        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</a>{{ else }}{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}{{ end }}</td>
+        <td class="cell-wide"><span class="sport-tag">{{ sport .Game.SportKey }}</span>{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}</a>{{ else }}{{ .Game.AwayTeam }} @ {{ .Game.HomeTeam }}{{ end }}</td>
         <td data-th="Starts">{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}</td>
         <td class="pick" data-th="Pick">{{ if eq .Bet.Selection "home" }}{{ .Game.HomeTeam }}{{ else }}{{ .Game.AwayTeam }}{{ end }} ML</td>
         <td data-th="Book">{{ .Bet.Bookmaker }} <span class="hint">{{ .OddsAge }}</span></td>
@@ -209,7 +217,7 @@
       </tr></thead>
       <tbody>
       {{ range .Shadow }}
-      <tr data-model="{{ .Model }}" data-dim-only>
+      <tr data-model="{{ .Model }}" data-sport="{{ .Sports }}" data-dim-only>
         <td class="pick" data-th="Model">{{ .Model }}</td>
         <td class="num" data-th="Shadow record">{{ .Won }}–{{ .Lost }}</td>
         <td class="num {{ if .ProfitPositive }}good{{ else }}bad{{ end }}" data-th="Would-be P/L">{{ signed .Profit }}</td>
@@ -229,9 +237,9 @@
       </tr></thead>
       <tbody>
       {{ range .Previews }}
-      <tr data-model="{{ .P.ModelID }}">
+      <tr data-model="{{ .P.ModelID }}" data-sport="{{ if .Game }}{{ .Game.SportKey }}{{ end }}">
         <td class="pick" data-th="Model">{{ .P.ModelID }}</td>
-        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td class="cell-wide">{{ if .Game }}<span class="sport-tag">{{ sport .Game.SportKey }}</span>{{ end }}{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
         <td data-th="Starts">{{ if .Game }}{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}{{ end }}</td>
         <td class="pick" data-th="Pick">{{ .Pick }} ML</td>
         <td data-th="Book">{{ .P.Bookmaker }}</td>
@@ -260,9 +268,9 @@
       </tr></thead>
       <tbody>
       {{ range .ActiveBets }}
-      <tr data-model="{{ .Bet.ModelID }}">
+      <tr data-model="{{ .Bet.ModelID }}" data-sport="{{ if .Game }}{{ .Game.SportKey }}{{ end }}">
         <td class="pick" data-th="Model">{{ .Bet.ModelID }}</td>
-        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td class="cell-wide">{{ if .Game }}<span class="sport-tag">{{ sport .Game.SportKey }}</span>{{ end }}{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
         <td data-th="Starts">{{ if .Game }}{{ .Game.CommenceTime.Local.Format "Mon Jan 2 3:04 PM" }}{{ end }}</td>
         <td class="pick" data-th="Pick">{{ title .Bet.Selection }} ML</td>
         <td data-th="Book">{{ .Bet.Bookmaker }}</td>
@@ -291,10 +299,10 @@
       </tr></thead>
       <tbody>
       {{ range .SettledBets }}
-      <tr data-model="{{ .Bet.ModelID }}">
+      <tr data-model="{{ .Bet.ModelID }}" data-sport="{{ if .Game }}{{ .Game.SportKey }}{{ end }}">
         <td data-th="Settled">{{ if .Bet.SettledAt }}{{ .Bet.SettledAt.Local.Format "Jan 2" }}{{ end }}</td>
         <td class="pick" data-th="Model">{{ .Bet.ModelID }}</td>
-        <td class="cell-wide">{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
+        <td class="cell-wide">{{ if .Game }}<span class="sport-tag">{{ sport .Game.SportKey }}</span>{{ end }}{{ if .GameURL }}<a href="{{ .GameURL }}" target="_blank" rel="noopener">{{ .Matchup }}</a>{{ else }}{{ .Matchup }}{{ end }}</td>
         <td class="pick" data-th="Pick">{{ title .Bet.Selection }} ML</td>
         <td class="num" data-th="Odds">{{ odds .Bet.Odds }}</td>
         <td class="num" data-th="Model prob">{{ prob .Bet.Probability }}</td>
@@ -400,20 +408,35 @@ function initTableSort() {
 }
 initTableSort();
 
-// Model filter chips: hide non-matching rows in bet tables, dim (never
-// hide) leaderboard rows. Choice survives the 5-minute auto-refresh.
+// Filter chips (model and sport, combined): hide non-matching rows in
+// bet tables, dim (never hide) leaderboard/shadow rows. A row's data-sport
+// is a game's sport key, or a space-joined list for a contender's own
+// rows — "" means every sport. Choices survive the 5-minute auto-refresh.
 (function () {
-  var bar = document.getElementById("model-filter");
-  if (!bar) return;
-  var chips = Array.prototype.slice.call(bar.querySelectorAll(".filter-chip"));
-  var KEY = "betanalysis-model-filter";
+  var groups = [
+    { id: "model-filter", attr: "data-model", key: "betanalysis-model-filter", value: "all" },
+    { id: "sport-filter", attr: "data-sport", key: "betanalysis-sport-filter", value: "all" }
+  ].map(function (g) {
+    g.bar = document.getElementById(g.id);
+    g.chips = g.bar ? Array.prototype.slice.call(g.bar.querySelectorAll(".filter-chip")) : [];
+    return g;
+  });
 
-  function apply(model) {
-    chips.forEach(function (c) {
-      c.classList.toggle("active", c.getAttribute("data-model") === model);
+  function rowMatches(row, g) {
+    if (g.value === "all" || !row.hasAttribute(g.attr)) return true;
+    var v = row.getAttribute(g.attr);
+    if (v === "") return true;
+    return v.split(" ").indexOf(g.value) >= 0;
+  }
+
+  function apply() {
+    groups.forEach(function (g) {
+      g.chips.forEach(function (c) {
+        c.classList.toggle("active", c.getAttribute(g.attr) === g.value);
+      });
     });
-    document.querySelectorAll("tr[data-model]").forEach(function (row) {
-      var match = model === "all" || row.getAttribute("data-model") === model;
+    document.querySelectorAll("tr[data-model], tr[data-sport]").forEach(function (row) {
+      var match = groups.every(function (g) { return rowMatches(row, g); });
       if (row.hasAttribute("data-dim-only")) {
         row.classList.toggle("dimmed", !match);
       } else {
@@ -422,18 +445,20 @@ initTableSort();
     });
   }
 
-  chips.forEach(function (c) {
-    c.addEventListener("click", function () {
-      var model = c.getAttribute("data-model");
-      try { localStorage.setItem(KEY, model); } catch (e) {}
-      apply(model);
+  groups.forEach(function (g) {
+    g.chips.forEach(function (c) {
+      c.addEventListener("click", function () {
+        g.value = c.getAttribute(g.attr);
+        try { localStorage.setItem(g.key, g.value); } catch (e) {}
+        apply();
+      });
     });
+    var saved = "all";
+    try { saved = localStorage.getItem(g.key) || "all"; } catch (e) {}
+    if (!g.chips.some(function (c) { return c.getAttribute(g.attr) === saved; })) saved = "all";
+    g.value = saved;
   });
-
-  var saved = "all";
-  try { saved = localStorage.getItem(KEY) || "all"; } catch (e) {}
-  if (!chips.some(function (c) { return c.getAttribute("data-model") === saved; })) saved = "all";
-  apply(saved);
+  apply();
 })();
 </script>
 

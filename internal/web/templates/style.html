@@ -51,6 +51,12 @@
     display: inline-flex; align-items: center; gap: 6px;
   }
   .filter-chip.active { color: var(--ink); border-color: var(--ink-muted); font-weight: 600; }
+  .filters + .filters { margin-top: -10px; }
+  .sport-tag {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--ink-muted);
+    border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-right: 6px;
+    vertical-align: 1px;
+  }
   tr.filtered-out { display: none; }
   tr.dimmed td { opacity: 0.35; }
   th[data-sortable] { cursor: pointer; user-select: none; }

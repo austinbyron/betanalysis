@@ -701,3 +701,58 @@ func TestDashboardConsensusRecordHiddenWhenEmpty(t *testing.T) {
 		t.Error("empty record must render no section")
 	}
 }
+
+func TestDashboardSportFilterChipsAndRowTags(t *testing.T) {
+	kick := time.Now().Add(5 * time.Hour)
+	store := &fakeStore{
+		portfolios: map[string]*types.Portfolio{
+			"default":  {ID: "default", Balance: 1000},
+			"hist-nfl": {ID: "hist-nfl", Balance: 1000},
+			"hist-any": {ID: "hist-any", Balance: 1000},
+		},
+		games: []types.Game{
+			{ID: "m1", HomeTeam: "Padres", AwayTeam: "Dodgers", SportKey: "baseball_mlb", Status: "scheduled", CommenceTime: kick},
+			{ID: "n1", HomeTeam: "Seahawks", AwayTeam: "Patriots", SportKey: "americanfootball_nfl", Status: "scheduled", CommenceTime: kick},
+		},
+		odds: map[string][]types.GameOdds{
+			"m1": {{GameID: "m1", Bookmaker: "draftkings", MarketType: types.MarketMoneyline, HomeOdds: f64(2.4), AwayOdds: f64(2.4), RetrievedAt: time.Now()}},
+			"n1": {{GameID: "n1", Bookmaker: "draftkings", MarketType: types.MarketMoneyline, HomeOdds: f64(2.4), AwayOdds: f64(2.4), RetrievedAt: time.Now()}},
+		},
+	}
+	lineup := []contenders.Contender{
+		{Name: "hist-mlb", Portfolio: "default", Sports: []string{"baseball_mlb"}, Selector: testSelector("hist-mlb")},
+		{Name: "hist-nfl", Portfolio: "hist-nfl", Sports: []string{"americanfootball_nfl"}, Selector: testSelector("hist-nfl")},
+		{Name: "hist-any", Portfolio: "hist-any", Selector: testSelector("hist-any")},
+	}
+	cfg := testConfig()
+	cfg.SportKeys = []string{"baseball_mlb", "americanfootball_nfl"}
+	srv, err := NewServer(store, lineup, cfg, nil, fixedStats{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, body := render(t, srv, "/")
+	for _, want := range []string{
+		`id="sport-filter"`,
+		`data-sport="all"`,
+		`data-sport="baseball_mlb">MLB`,                           // chip label is the short sport name
+		`data-sport="americanfootball_nfl">NFL`,                   // ...
+		`data-model="hist-mlb" data-sport="baseball_mlb"`,         // leaderboard row scoped to its sport
+		`data-model="hist-any" data-sport=""`,                     // unscoped contender shows under every sport
+		`data-model="hist-nfl" data-sport="americanfootball_nfl"`, // recommendation row tagged by game sport
+		`<span class="sport-tag">NFL</span>`,                      // game cells carry a sport tag
+		`betanalysis-sport-filter`,                                // persisted like the model filter
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("dashboard missing %q", want)
+		}
+	}
+}
+
+func TestDashboardHidesSportChipsForOneSport(t *testing.T) {
+	srv := newTestServer(t, &fakeStore{odds: map[string][]types.GameOdds{}})
+	_, body := render(t, srv, "/")
+	if strings.Contains(body, `id="sport-filter"`) {
+		t.Error("single-sport config should not render sport chips")
+	}
+}

@@ -67,6 +67,7 @@ func NewServer(store Store, lineup []contenders.Contender, cfg *config.Config, l
 		"pct":    func(v float64) string { return fmt.Sprintf("%.1f%%", v) },
 		"odds":   func(v float64) string { return fmt.Sprintf("%.2f", v) },
 		"prob":   func(v float64) string { return fmt.Sprintf("%.0f%%", v*100) },
+		"sport":  sportLabel,
 		"title": func(s string) string {
 			words := strings.Fields(strings.ReplaceAll(s, "_", " "))
 			for i, w := range words {
@@ -168,6 +169,7 @@ func (r previewRow) Pick() string {
 // would have done had the warmup gate not held it back
 type shadowRow struct {
 	Model          string
+	Sports         string // see leaderRow.Sports
 	Won            int
 	Lost           int
 	Pending        int
@@ -311,6 +313,31 @@ type leaderRow struct {
 	Name           string
 	Portfolio      *types.Portfolio
 	ProfitPositive bool
+	Sports         string // space-joined sport keys the contender covers; "" = all
+}
+
+// sportLabel is the short name for a sport key on chips and tags
+func sportLabel(key string) string {
+	switch key {
+	case "baseball_mlb":
+		return "MLB"
+	case "americanfootball_nfl":
+		return "NFL"
+	case "americanfootball_ncaaf":
+		return "NCAAF"
+	case "basketball_nba":
+		return "NBA"
+	case "basketball_ncaab":
+		return "NCAAB"
+	case "icehockey_nhl":
+		return "NHL"
+	}
+	return strings.ToUpper(key)
+}
+
+// contenderSports is the data-sport value for a contender's own rows
+func contenderSports(c contenders.Contender) string {
+	return strings.Join(c.Sports, " ")
 }
 
 type dashboardData struct {
@@ -370,6 +397,7 @@ func (s *Server) buildDashboard() dashboardData {
 			Name:           c.Name,
 			Portfolio:      portfolio,
 			ProfitPositive: portfolio.TotalProfitLoss >= 0,
+			Sports:         contenderSports(c),
 		})
 	}
 	sort.Slice(data.Leaderboard, func(i, j int) bool {
@@ -463,6 +491,7 @@ func (s *Server) buildPreviews() ([]previewRow, []shadowRow) {
 	for _, c := range s.lineup {
 		if row, ok := byModel[c.Name]; ok {
 			row.ProfitPositive = row.Profit >= 0
+			row.Sports = contenderSports(c)
 			shadow = append(shadow, *row)
 			delete(byModel, c.Name)
 		}
