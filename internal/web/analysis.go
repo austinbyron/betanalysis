@@ -268,7 +268,7 @@ func (s *Server) buildEloLandscape(now time.Time) []sportElo {
 			log.Error().Err(err).Str("sport", sport).Msg("analysis: finished games failed")
 			continue
 		}
-		hist := analysis.EloHistory(games)
+		hist := analysis.EloHistoryFrom(games, s.eloSeeder(sport))
 		if len(hist) == 0 {
 			continue
 		}

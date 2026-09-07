@@ -226,7 +226,7 @@ func (s *Server) buildEloPanel(game types.Game) *eloPanel {
 	if err != nil || len(games) == 0 {
 		return nil
 	}
-	hist := analysis.EloHistory(games)
+	hist := analysis.EloHistoryFrom(games, s.eloSeeder(game.SportKey))
 	home, away := hist[game.HomeTeam], hist[game.AwayTeam]
 	if len(home) == 0 && len(away) == 0 {
 		return nil

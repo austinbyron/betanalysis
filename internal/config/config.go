@@ -40,6 +40,9 @@ type OddsAPIConfig struct {
 	Regions      string  `mapstructure:"regions"`
 	DefaultSport string  `mapstructure:"default_sport"`
 	BaseURL      string  `mapstructure:"base_url"`
+	// QuotaFloor pauses API calls (and fires one Discord alert) once the
+	// reported credits remaining drop below it. 0 disables the guard.
+	QuotaFloor float64 `mapstructure:"quota_floor"`
 }
 
 type TradingConfig struct {
@@ -93,6 +96,9 @@ type ModelConfig struct {
 	Strategy      string   `mapstructure:"strategy"`
 	MinWinProb    *float64 `mapstructure:"min_win_prob"`
 	StakeFraction *float64 `mapstructure:"stake_fraction"`
+	// WarmupGames overrides analysis.warmup_games for this contender —
+	// a 17-game football season never reaches the MLB-sized default.
+	WarmupGames *int `mapstructure:"warmup_games"`
 }
 
 // Contenders returns the configured model race lineup. With no models list
@@ -169,6 +175,7 @@ func Load() (*Config, error) {
 	v.SetDefault("odds_api.rate_limit_rps", 0.5)
 	v.SetDefault("odds_api.regions", "us")
 	v.SetDefault("odds_api.default_sport", "americanfootball_nfl")
+	v.SetDefault("odds_api.quota_floor", 25)
 
 	v.SetDefault("trading.initial_bankroll", 1000.0)
 	v.SetDefault("trading.min_stake", 1.0)

@@ -103,7 +103,14 @@ Reseeding upserts; the Elo model reads game scores and ignores priors.
 - The Odds API free tier is 500 requests/month — the default schedules are
   sized for a paid tier; trim `sports` or the cron windows in
   `internal/scheduler/scheduler.go` if you're on the free tier. The dashboard
-  footer shows credits remaining as of the last API call.
+  footer shows credits remaining as of the last API call. `odds_api.quota_floor`
+  (default 25) pauses collection once remaining credits drop below it — one
+  probe per day checks for the monthly reset — and posts a single Discord
+  alert per dip when `BETANALYSIS_DISCORD_WEBHOOK` is set.
+- Each `analysis.models` entry can override `warmup_games` (short seasons)
+  and pick `strategy: winner` — back the likely winner whenever the blend
+  clears `min_win_prob`, flat-staked — instead of the default EV hunt. The
+  Elo model seeds starting ratings from the same standings priors.
 - While the warmup gate holds a model quiet, its would-be picks are recorded
   as preview bets and settled for score — the dashboard's "Warmup preview"
   shadow record answers whether the gate helped or hurt.

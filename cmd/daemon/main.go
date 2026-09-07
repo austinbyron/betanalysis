@@ -41,10 +41,22 @@ func main() {
 	defer db.Close()
 
 	client := api.NewClient(cfg.OddsAPI)
+	// Quota guard: prime from the persisted reading so a restart can't
+	// spend credits below the floor; alert Discord once per dip.
+	client.SetQuotaFloor(cfg.OddsAPI.QuotaFloor)
+	if q, err := db.GetAPIQuota(); err == nil && q != nil {
+		client.SeedQuota(q.RequestsRemaining, q.UpdatedAt)
+	}
+	var quotaSender notify.Sender
+	if webhook := os.Getenv("BETANALYSIS_DISCORD_WEBHOOK"); webhook != "" {
+		quotaSender = notify.NewDiscord(webhook)
+	}
+	quotaWatch := notify.NewQuotaWatch(quotaSender, cfg.OddsAPI.QuotaFloor)
 	client.SetQuotaHook(func(remaining, used float64) {
 		if err := db.SaveAPIQuota(remaining, used); err != nil {
 			log.Error().Err(err).Msg("Failed to save API quota")
 		}
+		quotaWatch.Observe(remaining, used)
 	})
 
 	// Cold sports (added to config before their season starts) get priors

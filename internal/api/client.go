@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,51 @@ type Client struct {
 	onQuota     QuotaFunc
 	mu          sync.Mutex
 	lastRequest time.Time
+
+	// Quota guard: refuse calls while the last known credits-remaining sits
+	// below quotaFloor, unless that reading is stale (a monthly reset may
+	// have landed) — then one probe goes through and refreshes it.
+	quotaFloor     float64
+	quotaRemaining float64
+	quotaKnown     bool
+	quotaAt        time.Time
+}
+
+// ErrQuotaGuard is returned instead of calling the API when the credit
+// floor is in force.
+var ErrQuotaGuard = errors.New("odds api quota guard: credits remaining below floor, call skipped")
+
+// quotaProbeAfter is how old a below-floor reading must be before the
+// guard lets a single probe through to learn the current counters.
+const quotaProbeAfter = 24 * time.Hour
+
+// SetQuotaFloor enables the guard; 0 disables it.
+func (c *Client) SetQuotaFloor(floor float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.quotaFloor = floor
+}
+
+// SeedQuota primes the guard from a persisted reading (e.g. the api_quota
+// row) so a restart can't burn credits below the floor.
+func (c *Client) SeedQuota(remaining float64, at time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.quotaRemaining, c.quotaKnown, c.quotaAt = remaining, true, at
+}
+
+// guardQuota reports whether the guard blocks a call right now
+func (c *Client) guardQuota() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.quotaFloor <= 0 || !c.quotaKnown || c.quotaRemaining >= c.quotaFloor {
+		return nil
+	}
+	if time.Since(c.quotaAt) >= quotaProbeAfter {
+		c.quotaAt = time.Now() // one probe per window
+		return nil
+	}
+	return fmt.Errorf("%w (%.0f remaining < floor %.0f)", ErrQuotaGuard, c.quotaRemaining, c.quotaFloor)
 }
 
 // QuotaFunc receives the credit counters The Odds API reports on every
@@ -72,6 +118,9 @@ func NewClient(cfg config.OddsAPIConfig) *Client {
 // doRequest performs a rate-limited GET request. The apiKey is added as a
 // query parameter per The Odds API v4 authentication scheme.
 func (c *Client) doRequest(ctx context.Context, path string, params url.Values) (*http.Response, error) {
+	if err := c.guardQuota(); err != nil {
+		return nil, err
+	}
 	c.mu.Lock()
 	wait := c.minInterval - time.Since(c.lastRequest)
 	if wait > 0 {
@@ -108,10 +157,13 @@ func (c *Client) doRequest(ctx context.Context, path string, params url.Values) 
 			Str("requests_remaining", remaining).
 			Str("requests_used", used).
 			Msg("Odds API quota")
-		if c.onQuota != nil {
-			rem, errR := strconv.ParseFloat(remaining, 64)
-			u, errU := strconv.ParseFloat(used, 64)
-			if errR == nil && errU == nil {
+		rem, errR := strconv.ParseFloat(remaining, 64)
+		u, errU := strconv.ParseFloat(used, 64)
+		if errR == nil && errU == nil {
+			c.mu.Lock()
+			c.quotaRemaining, c.quotaKnown, c.quotaAt = rem, true, time.Now()
+			c.mu.Unlock()
+			if c.onQuota != nil {
 				c.onQuota(rem, u)
 			}
 		}

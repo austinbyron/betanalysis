@@ -51,6 +51,9 @@ func Build(cfg *config.Config, stats analysis.StatsProvider, games analysis.Game
 
 		analysisCfg := cfg.Analysis
 		analysisCfg.ModelType = m.ModelType
+		if m.WarmupGames != nil {
+			analysisCfg.WarmupGames = *m.WarmupGames
+		}
 		estimator, err := analysis.NewEstimator(analysisCfg, stats, games)
 		if err != nil {
 			return nil, fmt.Errorf("model %q: %w", m.Name, err)

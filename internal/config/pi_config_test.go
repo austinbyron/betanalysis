@@ -43,8 +43,8 @@ func TestPiConfigFallLineup(t *testing.T) {
 	}
 
 	models := cfg.Contenders()
-	if len(models) != 11 {
-		t.Fatalf("contenders = %d, want 11", len(models))
+	if len(models) != 13 {
+		t.Fatalf("contenders = %d, want 13", len(models))
 	}
 	byName := map[string]ModelConfig{}
 	for _, m := range models {
@@ -58,8 +58,10 @@ func TestPiConfigFallLineup(t *testing.T) {
 	football := map[string]string{
 		"elo-nfl":        "americanfootball_nfl",
 		"thompson-nfl":   "americanfootball_nfl",
+		"winner-nfl":     "americanfootball_nfl",
 		"elo-ncaaf":      "americanfootball_ncaaf",
 		"thompson-ncaaf": "americanfootball_ncaaf",
+		"winner-ncaaf":   "americanfootball_ncaaf",
 	}
 	for name, sport := range football {
 		m, ok := byName[name]
@@ -73,6 +75,18 @@ func TestPiConfigFallLineup(t *testing.T) {
 		if len(m.Adjusters) != 0 {
 			t.Errorf("%s has adjusters %v; mlb_pitcher is MLB-only", name, m.Adjusters)
 		}
+		// A 17-game season never reaches the MLB-sized global warmup
+		if m.WarmupGames == nil || *m.WarmupGames > 8 {
+			t.Errorf("%s needs a short warmup_games override (got %v)", name, m.WarmupGames)
+		}
+	}
+	for _, name := range []string{"winner-nfl", "winner-ncaaf"} {
+		if byName[name].Strategy != "winner" {
+			t.Errorf("%s strategy = %q, want winner", name, byName[name].Strategy)
+		}
+	}
+	if cfg.OddsAPI.QuotaFloor <= 0 {
+		t.Error("pi config: odds_api.quota_floor must be set (free tier needs the guard)")
 	}
 	for _, name := range []string{"thompson-pitcher", "thompson-raw", "historical-pitcher", "epsilon-pitcher", "elo-pitcher"} {
 		m, ok := byName[name]

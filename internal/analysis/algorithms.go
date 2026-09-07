@@ -145,7 +145,11 @@ func NewEstimator(cfg config.AnalysisConfig, stats StatsProvider, games GamesPro
 		if games == nil {
 			return nil, fmt.Errorf("model type elo requires a games provider")
 		}
-		return NewElo(games, cfg.WarmupGames), nil
+		elo := NewElo(games, cfg.WarmupGames)
+		if ps, ok := stats.(*priorStats); ok {
+			elo.WithPriors(ps.priors)
+		}
+		return elo, nil
 	default:
 		return nil, fmt.Errorf("unknown model type: %s", cfg.ModelType)
 	}

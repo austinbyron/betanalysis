@@ -117,3 +117,28 @@ func TestBuildRejectsBadWinnerOverrides(t *testing.T) {
 		t.Fatalf("err = %v, want min_win_prob complaint", err)
 	}
 }
+
+func TestBuildAppliesPerModelWarmup(t *testing.T) {
+	six := 6
+	cfg := raceConfig(
+		config.ModelConfig{Name: "short", ModelType: "historical", WarmupGames: &six},
+		config.ModelConfig{Name: "global", ModelType: "historical"},
+	)
+	cfg.Analysis.WarmupGames = 20
+	cs, err := Build(cfg, recordStats{6, 6}, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	g := types.Game{HomeTeam: "H", AwayTeam: "A", SportKey: "baseball_mlb"}
+	if c := cs[0].Selector.Confidence(g); c != 1 {
+		t.Errorf("warmup 6 with 12-game records: confidence = %v, want 1", c)
+	}
+	if c := cs[1].Selector.Confidence(g); c != 0.6 {
+		t.Errorf("global warmup 20: confidence = %v, want 0.6", c)
+	}
+}
+
+// recordStats gives every team the same fixed record
+type recordStats struct{ w, l int }
+
+func (r recordStats) TeamRecord(string, string) (int, int) { return r.w, r.l }

@@ -278,6 +278,15 @@ type gridLine struct {
 }
 
 // equitySeries is one contender's cash-balance line. Slot is the 1-based
+// eloSeeder mirrors the live Elo estimator's prior seeding on display
+// pages when the store also serves priors; nil (unseeded) otherwise.
+func (s *Server) eloSeeder(sport string) analysis.EloSeeder {
+	if p, ok := s.store.(analysis.PriorsProvider); ok {
+		return analysis.EloSeederFromPriors(p, sport)
+	}
+	return nil
+}
+
 // palette slot, fixed by lineup order — color follows the entity even when
 // other contenders have no series yet.
 type equitySeries struct {
