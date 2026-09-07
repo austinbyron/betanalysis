@@ -17,6 +17,7 @@ type Config struct {
 	Server    ServerConfig    `mapstructure:"server"`
 	Notify    NotifyConfig    `mapstructure:"notify"`
 	Consensus ConsensusConfig `mapstructure:"consensus"`
+	Books     BooksConfig     `mapstructure:"books"`
 	SportKeys []string        `mapstructure:"sports"`
 }
 
@@ -160,6 +161,14 @@ type ConsensusConfig struct {
 	Stake float64 `mapstructure:"stake"`
 }
 
+// BooksConfig controls direct sportsbook polling (internal/books): free
+// odds snapshots attached to games The Odds API already collected.
+type BooksConfig struct {
+	Enabled bool     `mapstructure:"enabled"`
+	Cron    string   `mapstructure:"cron"`    // 5-field spec, scheduler timezone
+	Sources []string `mapstructure:"sources"` // bovada, draftkings
+}
+
 func Load() (*Config, error) {
 	v := viper.New()
 
@@ -202,6 +211,9 @@ func Load() (*Config, error) {
 	v.SetDefault("notify.base_url", "http://betanalysis.homelab")
 
 	v.SetDefault("consensus.stake", 5.0)
+	v.SetDefault("books.enabled", false)
+	v.SetDefault("books.cron", "5 * * * *")
+	v.SetDefault("books.sources", []string{"bovada", "draftkings"})
 
 	v.SetDefault("sports", []string{
 		"americanfootball_nfl",

@@ -1,0 +1,198 @@
+{
+ "events": [
+  {
+   "id": "34624717",
+   "name": "WAS Nationals @ LA Dodgers",
+   "startEventDate": "2026-09-07T02:09:56.0000000Z",
+   "participants": [
+    {
+     "id": "29931",
+     "name": "LA Dodgers",
+     "venueRole": "Home",
+     "type": "Team",
+     "metadata": {
+      "rosettaTeamId": "29931",
+      "rosettaTeamName": "Dodgers",
+      "shortName": "LAD",
+      "startingPitcherPlayerId": "181117",
+      "teamColor": "#005A9C",
+      "teamColorSecondary": "#EF3E42",
+      "teamColorTertiary": "#A5ACAF",
+      "startingPitcherPlayerName": "Justin Wrobleski"
+     },
+     "sortOrder": 2,
+     "seoIdentifier": "Dodgers",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    },
+    {
+     "id": "29836",
+     "name": "WAS Nationals",
+     "venueRole": "Away",
+     "type": "Team",
+     "metadata": {
+      "rosettaTeamId": "29836",
+      "rosettaTeamName": "Nationals",
+      "shortName": "WAS",
+      "startingPitcherPlayerId": "207310",
+      "teamColor": "#AB0003",
+      "teamColorSecondary": "#11225B",
+      "teamColorTertiary": "#FFFFFF",
+      "startingPitcherPlayerName": "Andrew Alvarez"
+     },
+     "sortOrder": 1,
+     "seoIdentifier": "Nationals",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    }
+   ],
+   "status": "STARTED"
+  },
+  {
+   "id": "34629138",
+   "name": "ATL Braves @ PHI Phillies",
+   "startEventDate": "2026-09-07T17:05:00.0000000Z",
+   "participants": [
+    {
+     "id": "29857",
+     "name": "PHI Phillies",
+     "venueRole": "Home",
+     "type": "Team",
+     "metadata": {
+      "retailRotNumber": "203",
+      "rosettaTeamId": "29857",
+      "rosettaTeamName": "Phillies",
+      "shortName": "PHI",
+      "startingPitcherPlayerId": "107726",
+      "teamColor": "#BA0C2F",
+      "teamColorSecondary": "#002D72",
+      "teamColorTertiary": "#FFFFFF",
+      "startingPitcherPlayerName": "Jesus Luzardo"
+     },
+     "sortOrder": 2,
+     "seoIdentifier": "Phillies",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    },
+    {
+     "id": "29861",
+     "name": "ATL Braves",
+     "venueRole": "Away",
+     "type": "Team",
+     "metadata": {
+      "retailRotNumber": "202",
+      "rosettaTeamId": "29861",
+      "rosettaTeamName": "Braves",
+      "shortName": "ATL",
+      "startingPitcherPlayerId": "109714",
+      "teamColor": "#0C2340",
+      "teamColorSecondary": "#BA0C2F",
+      "teamColorTertiary": "#EAAA00",
+      "startingPitcherPlayerName": "Grant Holmes"
+     },
+     "sortOrder": 1,
+     "seoIdentifier": "Braves",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    }
+   ],
+   "status": "NOT_STARTED"
+  }
+ ],
+ "markets": [
+  {
+   "id": "1_86190847",
+   "eventId": "34624717",
+   "name": "Moneyline",
+   "main": true
+  },
+  {
+   "id": "3_86190847",
+   "eventId": "34624717",
+   "name": "Total",
+   "main": true
+  },
+  {
+   "id": "1_86190089",
+   "eventId": "34629138",
+   "name": "Moneyline",
+   "main": true
+  },
+  {
+   "id": "3_86190089",
+   "eventId": "34629138",
+   "name": "Total",
+   "main": true
+  }
+ ],
+ "selections": [
+  {
+   "id": "0OU86190089O800_1",
+   "marketId": "3_86190089",
+   "label": "Over",
+   "trueOdds": 1.90909091,
+   "points": 8,
+   "outcomeType": "Over",
+   "main": true
+  },
+  {
+   "id": "0OU86190089U800_3",
+   "marketId": "3_86190089",
+   "label": "Under",
+   "trueOdds": 1.90909091,
+   "points": 8,
+   "outcomeType": "Under",
+   "main": true
+  },
+  {
+   "id": "0OU86190847O1050_1",
+   "marketId": "3_86190847",
+   "label": "Over",
+   "trueOdds": 1.5988024,
+   "points": 10.5,
+   "outcomeType": "Over",
+   "main": true
+  },
+  {
+   "id": "0OU86190847U1050_3",
+   "marketId": "3_86190847",
+   "label": "Under",
+   "trueOdds": 2.28,
+   "points": 10.5,
+   "outcomeType": "Under",
+   "main": true
+  },
+  {
+   "id": "0ML86190089_3",
+   "marketId": "1_86190089",
+   "label": "ATL Braves",
+   "trueOdds": 2.41,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0ML86190847_3",
+   "marketId": "1_86190847",
+   "label": "WAS Nationals",
+   "trueOdds": 1.48309179,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0ML86190089_1",
+   "marketId": "1_86190089",
+   "label": "PHI Phillies",
+   "trueOdds": 1.58479533,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0ML86190847_1",
+   "marketId": "1_86190847",
+   "label": "LA Dodgers",
+   "trueOdds": 2.56,
+   "outcomeType": "Home",
+   "main": true
+  }
+ ]
+}

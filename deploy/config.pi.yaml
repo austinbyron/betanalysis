@@ -102,6 +102,14 @@ analysis:
       sports: [americanfootball_ncaaf]
       warmup_games: 6
 
+# Direct sportsbook polling (free): Bovada + DraftKings lines attached to
+# games The Odds API already collected — fresh snapshots between the
+# once-a-day aggregator pulls. Both fail open if an endpoint changes.
+books:
+  enabled: true
+  cron: "5 * * * *"
+  sources: [bovada, draftkings]
+
 scheduler:
   enabled: true
   timezone: America/New_York

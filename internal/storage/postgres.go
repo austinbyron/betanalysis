@@ -90,6 +90,13 @@ func (p *PostgresDB) SaveGames(games []types.Game) error {
 // a UTC wall clock, so the comparison must use UTC now — bare NOW() is the
 // session's local time, which kept games "upcoming" for hours after first
 // pitch and let the engine bet on games already in play.
+// UpcomingHorizonDays bounds "upcoming": football feeds list the whole
+// season with lookahead lines, and betting months out on those would be
+// noise (and, for flat-staked winner models, a bankroll dump). Eight days
+// covers a full weekly slate through the following Monday.
+const UpcomingHorizonDays = 8
+
+// GetUpcomingGames returns scheduled games starting within the horizon
 func (p *PostgresDB) GetUpcomingGames(sportKey string) ([]types.Game, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -98,11 +105,13 @@ func (p *PostgresDB) GetUpcomingGames(sportKey string) ([]types.Game, error) {
 	query := `
 		SELECT id, sport_key, commence_time, home_team, away_team, status, home_score, away_score, created_at, updated_at
 		FROM games
-		WHERE sport_key = $1 AND status = 'scheduled' AND commence_time > timezone('UTC', NOW())
+		WHERE sport_key = $1 AND status = 'scheduled'
+		  AND commence_time > timezone('UTC', NOW())
+		  AND commence_time < timezone('UTC', NOW()) + ($2 * interval '1 day')
 		ORDER BY commence_time ASC
 	`
 
-	if err := p.db.SelectContext(ctx, &games, query, sportKey); err != nil {
+	if err := p.db.SelectContext(ctx, &games, query, sportKey, UpcomingHorizonDays); err != nil {
 		return nil, fmt.Errorf("failed to get upcoming games: %w", err)
 	}
 
@@ -190,11 +199,15 @@ func (p *PostgresDB) SaveOdds(odds []types.GameOdds) error {
 
 	query := `
 		INSERT INTO game_odds (game_id, bookmaker, market_type, home_odds, away_odds, draw_odds,
-			home_spread, away_spread, over_under, over_odds, under_odds, last_update, retrieved_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			home_spread, away_spread, over_under, over_odds, under_odds, last_update, retrieved_at, source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 
 	for _, o := range odds {
+		source := o.Source
+		if source == "" {
+			source = "oddsapi"
+		}
 		_, err := p.db.ExecContext(ctx, query,
 			o.GameID,
 			o.Bookmaker,
@@ -209,6 +222,7 @@ func (p *PostgresDB) SaveOdds(odds []types.GameOdds) error {
 			o.UnderOdds,
 			o.LastUpdate,
 			o.RetrievedAt,
+			source,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to save odds: %w", err)
@@ -227,7 +241,7 @@ func (p *PostgresDB) GetOddsForGame(gameID string) ([]types.GameOdds, error) {
 	query := `
 		SELECT DISTINCT ON (bookmaker, market_type)
 			id, game_id, bookmaker, market_type, home_odds, away_odds, draw_odds,
-			home_spread, away_spread, over_under, over_odds, under_odds, last_update, retrieved_at
+			home_spread, away_spread, over_under, over_odds, under_odds, last_update, retrieved_at, source
 		FROM game_odds
 		WHERE game_id = $1
 		ORDER BY bookmaker, market_type, retrieved_at DESC

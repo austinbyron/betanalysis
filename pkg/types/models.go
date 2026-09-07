@@ -92,6 +92,10 @@ type GameOdds struct {
 	UnderOdds   *float64  `json:"under_odds,omitempty" db:"under_odds"`
 	LastUpdate  time.Time `json:"last_update" db:"last_update"`
 	RetrievedAt time.Time `json:"retrieved_at" db:"retrieved_at"`
+	// Source names the feed a snapshot came from: "oddsapi" (default) or
+	// a direct book poll ("bovada", "draftkings"). Same bookmaker key
+	// either way, so the engine treats them as one price series.
+	Source string `json:"source,omitempty" db:"source"`
 }
 
 // ImpliedProbability returns the implied probability from decimal odds

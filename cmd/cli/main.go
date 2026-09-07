@@ -10,6 +10,7 @@ import (
 
 	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/api"
+	"github.com/austinbyron/betanalysis/internal/books"
 	"github.com/austinbyron/betanalysis/internal/config"
 	"github.com/austinbyron/betanalysis/internal/consensus"
 	"github.com/austinbyron/betanalysis/internal/contenders"
@@ -111,6 +112,11 @@ func main() {
 				Name:   "settle",
 				Usage:  "Settle completed bets",
 				Action: runSettle,
+			},
+			{
+				Name:   "poll-books",
+				Usage:  "Poll the configured sportsbooks once (books.sources) and attach lines to upcoming games",
+				Action: runPollBooks,
 			},
 			{
 				Name: "backfill-consensus",
@@ -392,6 +398,31 @@ func contenderBacktestBuilder(cfg *config.Config, name string) (analysis.Selecto
 		}
 		return selector, nil
 	}, nil
+}
+
+func runPollBooks(c *cli.Context) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	db, err := storage.NewPostgres(cfg.Database)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	sources, err := books.Build(cfg.Books.Sources)
+	if err != nil {
+		return err
+	}
+	for _, r := range books.Poll(db, sources, cfg.Sports(), time.Now().UTC()) {
+		status := "ok"
+		if r.Err != nil {
+			status = "ERR " + r.Err.Error()
+		}
+		fmt.Printf("%-11s %-24s lines=%-3d rows=%-3d unmatched=%-3d %s\n", r.Source, r.Sport, r.Lines, r.Rows, r.Unmatched, status)
+	}
+	return nil
 }
 
 func runSettle(c *cli.Context) error {

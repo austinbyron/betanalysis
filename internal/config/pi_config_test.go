@@ -133,6 +133,13 @@ func TestPiConfigWinnerContenders(t *testing.T) {
 	}
 }
 
+func TestPiConfigBooksEnabled(t *testing.T) {
+	cfg := loadPiConfig(t)
+	if !cfg.Books.Enabled || cfg.Books.Cron == "" || len(cfg.Books.Sources) != 2 {
+		t.Errorf("pi config books = %+v, want enabled hourly with both sources", cfg.Books)
+	}
+}
+
 func TestPiConfigNotifyEnabled(t *testing.T) {
 	cfg := loadPiConfig(t)
 	if !cfg.Notify.Enabled {

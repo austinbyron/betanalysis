@@ -1,0 +1,254 @@
+{
+ "events": [
+  {
+   "id": "34005255",
+   "name": "SMU @ Florida State",
+   "startEventDate": "2026-09-07T23:30:00.0000000Z",
+   "participants": [
+    {
+     "id": "7627",
+     "name": "Florida State",
+     "venueRole": "Home",
+     "type": "Team",
+     "metadata": {
+      "conferenceId": "2",
+      "conferenceName": "Atlantic Coast Conference",
+      "conferenceShortName": "ACC",
+      "retailRotNumber": "639",
+      "rosettaTeamId": "7627",
+      "rosettaTeamName": "Seminoles",
+      "shortName": "FSU",
+      "teamColor": "#782F40",
+      "teamColorSecondary": "#CEB888",
+      "teamColorTertiary": "#FFFFFF"
+     },
+     "sortOrder": 2,
+     "seoIdentifier": "Seminoles",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    },
+    {
+     "id": "8233",
+     "name": "SMU",
+     "venueRole": "Away",
+     "type": "Team",
+     "metadata": {
+      "conferenceId": "2",
+      "conferenceName": "Atlantic Coast Conference",
+      "conferenceShortName": "ACC",
+      "displayRankSeed": "19",
+      "ranking": "19",
+      "retailRotNumber": "638",
+      "rosettaTeamId": "8233",
+      "rosettaTeamName": "Mustangs",
+      "shortName": "SMU",
+      "teamColor": "#0033A0",
+      "teamColorSecondary": "#C8102E",
+      "teamColorTertiary": "#FFFFFF"
+     },
+     "sortOrder": 1,
+     "seoIdentifier": "Mustangs",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    }
+   ],
+   "status": "NOT_STARTED"
+  },
+  {
+   "id": "34603680",
+   "name": "Rutgers @ Boston College",
+   "startEventDate": "2026-09-11T23:30:00.0000000Z",
+   "participants": [
+    {
+     "id": "7692",
+     "name": "Boston College",
+     "venueRole": "Home",
+     "type": "Team",
+     "metadata": {
+      "conferenceId": "2",
+      "conferenceName": "Atlantic Coast Conference",
+      "conferenceShortName": "ACC",
+      "retailRotNumber": "883",
+      "rosettaTeamId": "7692",
+      "rosettaTeamName": "Eagles",
+      "shortName": "BC",
+      "teamColor": "#98002E",
+      "teamColorSecondary": "#BC9B6A",
+      "teamColorTertiary": "#726158"
+     },
+     "sortOrder": 2,
+     "seoIdentifier": "Eagles",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    },
+    {
+     "id": "7721",
+     "name": "Rutgers",
+     "venueRole": "Away",
+     "type": "Team",
+     "metadata": {
+      "conferenceId": "3",
+      "conferenceName": "Big Ten Conference",
+      "conferenceShortName": "Big Ten",
+      "retailRotNumber": "882",
+      "rosettaTeamId": "7721",
+      "rosettaTeamName": "Scarlet Knights",
+      "shortName": "RUTG",
+      "teamColor": "#CC0033",
+      "teamColorSecondary": "#5F6A72",
+      "teamColorTertiary": "#000000"
+     },
+     "sortOrder": 1,
+     "seoIdentifier": "Scarlet Knights",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    }
+   ],
+   "status": "NOT_STARTED"
+  }
+ ],
+ "markets": [
+  {
+   "id": "1_84376935",
+   "eventId": "34005255",
+   "name": "Moneyline",
+   "main": true
+  },
+  {
+   "id": "2_84376935",
+   "eventId": "34005255",
+   "name": "Spread",
+   "main": true
+  },
+  {
+   "id": "3_84376935",
+   "eventId": "34005255",
+   "name": "Total",
+   "main": true
+  },
+  {
+   "id": "1_86111732",
+   "eventId": "34603680",
+   "name": "Moneyline",
+   "main": true
+  },
+  {
+   "id": "2_86111732",
+   "eventId": "34603680",
+   "name": "Spread",
+   "main": true
+  },
+  {
+   "id": "3_86111732",
+   "eventId": "34603680",
+   "name": "Total",
+   "main": true
+  }
+ ],
+ "selections": [
+  {
+   "id": "0HC84376935N300_3",
+   "marketId": "2_84376935",
+   "label": "SMU",
+   "trueOdds": 1.95238096,
+   "points": -3,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0HC84376935P300_1",
+   "marketId": "2_84376935",
+   "label": "Florida State",
+   "trueOdds": 1.86956522,
+   "points": 3,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0HC86111732P350_3",
+   "marketId": "2_86111732",
+   "label": "Rutgers",
+   "trueOdds": 1.92592593,
+   "points": 3.5,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0HC86111732N350_1",
+   "marketId": "2_86111732",
+   "label": "Boston College",
+   "trueOdds": 1.89285715,
+   "points": -3.5,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0OU84376935O5250_1",
+   "marketId": "3_84376935",
+   "label": "Over",
+   "trueOdds": 1.86956522,
+   "points": 52.5,
+   "outcomeType": "Over",
+   "main": true
+  },
+  {
+   "id": "0OU84376935U5250_3",
+   "marketId": "3_84376935",
+   "label": "Under",
+   "trueOdds": 1.95238096,
+   "points": 52.5,
+   "outcomeType": "Under",
+   "main": true
+  },
+  {
+   "id": "0OU86111732O5450_1",
+   "marketId": "3_86111732",
+   "label": "Over",
+   "trueOdds": 1.89285715,
+   "points": 54.5,
+   "outcomeType": "Over",
+   "main": true
+  },
+  {
+   "id": "0OU86111732U5450_3",
+   "marketId": "3_86111732",
+   "label": "Under",
+   "trueOdds": 1.92592593,
+   "points": 54.5,
+   "outcomeType": "Under",
+   "main": true
+  },
+  {
+   "id": "0ML86111732_3",
+   "marketId": "1_86111732",
+   "label": "Rutgers",
+   "trueOdds": 2.45,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0ML86111732_1",
+   "marketId": "1_86111732",
+   "label": "Boston College",
+   "trueOdds": 1.57142858,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0ML84376935_3",
+   "marketId": "1_84376935",
+   "label": "SMU",
+   "trueOdds": 1.6451613,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0ML84376935_1",
+   "marketId": "1_84376935",
+   "label": "Florida State",
+   "trueOdds": 2.3,
+   "outcomeType": "Home",
+   "main": true
+  }
+ ]
+}

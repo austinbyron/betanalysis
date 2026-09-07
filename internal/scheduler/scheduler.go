@@ -6,6 +6,7 @@ import (
 
 	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/api"
+	"github.com/austinbyron/betanalysis/internal/books"
 	"github.com/austinbyron/betanalysis/internal/config"
 	"github.com/austinbyron/betanalysis/internal/espn"
 	"github.com/austinbyron/betanalysis/internal/storage"
@@ -95,6 +96,14 @@ func (s *Scheduler) Start() {
 		sport := sport
 		jobs = append(jobs, job{"collect_" + sport, spec, sport, func() { s.collectOdds(sport) }})
 	}
+	if s.config.Books.Enabled {
+		sources, err := books.Build(s.config.Books.Sources)
+		if err != nil {
+			log.Error().Err(err).Msg("books: disabled — bad books.sources")
+		} else {
+			jobs = append(jobs, job{"books", s.config.Books.Cron, "", func() { s.pollBooks(sources) }})
+		}
+	}
 	jobs = append(jobs,
 		job{"update_stats", statsSpec, "", s.updateTeamStats},
 		// Bet settlement nightly at 11:30 PM
@@ -137,6 +146,12 @@ func (s *Scheduler) Stop() {
 // IsRunning returns whether the scheduler is running
 func (s *Scheduler) IsRunning() bool {
 	return s.running
+}
+
+// pollBooks attaches direct-sportsbook snapshots to upcoming games.
+// Free, so it runs for every configured sport; each source fails open.
+func (s *Scheduler) pollBooks(sources []books.Source) {
+	books.Poll(s.storage, sources, s.config.Sports(), time.Now().UTC())
 }
 
 // collectOdds fetches and stores games and their odds for a sport. Games are

@@ -1,0 +1,240 @@
+{
+ "events": [
+  {
+   "id": "34118042",
+   "name": "NE Patriots @ SEA Seahawks",
+   "startEventDate": "2026-09-10T00:20:00.0000000Z",
+   "participants": [
+    {
+     "id": "18471",
+     "name": "SEA Seahawks",
+     "venueRole": "Home",
+     "type": "Team",
+     "metadata": {
+      "retailRotNumber": "101",
+      "rosettaTeamId": "18471",
+      "rosettaTeamName": "Seahawks",
+      "shortName": "SEA",
+      "teamColor": "#002244",
+      "teamColorSecondary": "#69BE28",
+      "teamColorTertiary": "#A5ACAF"
+     },
+     "sortOrder": 2,
+     "seoIdentifier": "Seahawks",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    },
+    {
+     "id": "18415",
+     "name": "NE Patriots",
+     "venueRole": "Away",
+     "type": "Team",
+     "metadata": {
+      "retailRotNumber": "100",
+      "rosettaTeamId": "18415",
+      "rosettaTeamName": "Patriots",
+      "shortName": "NE",
+      "teamColor": "#002244",
+      "teamColorSecondary": "#C60C30",
+      "teamColorTertiary": "#B0B7BC"
+     },
+     "sortOrder": 1,
+     "seoIdentifier": "Patriots",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    }
+   ],
+   "status": "NOT_STARTED"
+  },
+  {
+   "id": "34107951",
+   "name": "SF 49ers @ LA Rams",
+   "startEventDate": "2026-09-11T00:35:00.0000000Z",
+   "participants": [
+    {
+     "id": "18397",
+     "name": "LA Rams",
+     "venueRole": "Home",
+     "type": "Team",
+     "metadata": {
+      "retailRotNumber": "103",
+      "rosettaTeamId": "18397",
+      "rosettaTeamName": "Rams",
+      "shortName": "LAR",
+      "teamColor": "#003594",
+      "teamColorSecondary": "#FFD100",
+      "teamColorTertiary": "#FF8200"
+     },
+     "sortOrder": 2,
+     "seoIdentifier": "Rams",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    },
+    {
+     "id": "18465",
+     "name": "SF 49ers",
+     "venueRole": "Away",
+     "type": "Team",
+     "metadata": {
+      "retailRotNumber": "102",
+      "rosettaTeamId": "18465",
+      "rosettaTeamName": "49ers",
+      "shortName": "SF",
+      "teamColor": "#AA0000",
+      "teamColorSecondary": "#B5925D",
+      "teamColorTertiary": "#000000"
+     },
+     "sortOrder": 1,
+     "seoIdentifier": "49ers",
+     "isNationalTeam": false,
+     "countryCode": "US"
+    }
+   ],
+   "status": "STARTED"
+  }
+ ],
+ "markets": [
+  {
+   "id": "1_84695475",
+   "eventId": "34118042",
+   "name": "Moneyline",
+   "main": true
+  },
+  {
+   "id": "2_84695475",
+   "eventId": "34118042",
+   "name": "Spread",
+   "main": true
+  },
+  {
+   "id": "3_84695475",
+   "eventId": "34118042",
+   "name": "Total",
+   "main": true
+  },
+  {
+   "id": "1_84665205",
+   "eventId": "34107951",
+   "name": "Moneyline",
+   "main": true
+  },
+  {
+   "id": "2_84665205",
+   "eventId": "34107951",
+   "name": "Spread",
+   "main": true
+  },
+  {
+   "id": "3_84665205",
+   "eventId": "34107951",
+   "name": "Total",
+   "main": true
+  }
+ ],
+ "selections": [
+  {
+   "id": "0HC84695475P350_3",
+   "marketId": "2_84695475",
+   "label": "NE Patriots",
+   "trueOdds": 1.86956522,
+   "points": 3.5,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0HC84665205P350_3",
+   "marketId": "2_84665205",
+   "label": "SF 49ers",
+   "trueOdds": 1.89285715,
+   "points": 3.5,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0HC84695475N350_1",
+   "marketId": "2_84695475",
+   "label": "SEA Seahawks",
+   "trueOdds": 1.95238096,
+   "points": -3.5,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0HC84665205N350_1",
+   "marketId": "2_84665205",
+   "label": "LA Rams",
+   "trueOdds": 1.92592593,
+   "points": -3.5,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0OU84695475O4450_1",
+   "marketId": "3_84695475",
+   "label": "Over",
+   "trueOdds": 1.95238096,
+   "points": 44.5,
+   "outcomeType": "Over",
+   "main": true
+  },
+  {
+   "id": "0OU84695475U4450_3",
+   "marketId": "3_84695475",
+   "label": "Under",
+   "trueOdds": 1.86956522,
+   "points": 44.5,
+   "outcomeType": "Under",
+   "main": true
+  },
+  {
+   "id": "0OU84665205O4850_1",
+   "marketId": "3_84665205",
+   "label": "Over",
+   "trueOdds": 1.95238096,
+   "points": 48.5,
+   "outcomeType": "Over",
+   "main": true
+  },
+  {
+   "id": "0OU84665205U4850_3",
+   "marketId": "3_84665205",
+   "label": "Under",
+   "trueOdds": 1.86956522,
+   "points": 48.5,
+   "outcomeType": "Under",
+   "main": true
+  },
+  {
+   "id": "0ML84665205_3",
+   "marketId": "1_84665205",
+   "label": "SF 49ers",
+   "trueOdds": 2.6,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0ML84665205_1",
+   "marketId": "1_84665205",
+   "label": "LA Rams",
+   "trueOdds": 1.52083334,
+   "outcomeType": "Home",
+   "main": true
+  },
+  {
+   "id": "0ML84695475_3",
+   "marketId": "1_84695475",
+   "label": "NE Patriots",
+   "trueOdds": 2.5,
+   "outcomeType": "Away",
+   "main": true
+  },
+  {
+   "id": "0ML84695475_1",
+   "marketId": "1_84695475",
+   "label": "SEA Seahawks",
+   "trueOdds": 1.55555556,
+   "outcomeType": "Home",
+   "main": true
+  }
+ ]
+}

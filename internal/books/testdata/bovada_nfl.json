@@ -1,0 +1,366 @@
+[
+ {
+  "path": [
+   {
+    "id": "241",
+    "link": "/football/nfl",
+    "description": "NFL",
+    "type": "LEAGUE",
+    "sportCode": "FOOT",
+    "order": 2,
+    "leaf": true,
+    "current": true
+   },
+   {
+    "id": "1",
+    "link": "/football",
+    "description": "Football",
+    "type": "SPORT",
+    "sportCode": "FOOT",
+    "order": 6,
+    "leaf": false,
+    "current": false
+   }
+  ],
+  "events": [
+   {
+    "id": "25568702",
+    "description": "New England Patriots @ Seattle Seahawks",
+    "startTime": 1788999600000,
+    "live": false,
+    "type": "GAMEEVENT",
+    "sport": "FOOT",
+    "competitors": [
+     {
+      "id": "25568702-11904231",
+      "name": "Seattle Seahawks",
+      "home": true,
+      "shortName": "Seahawks"
+     },
+     {
+      "id": "25568702-11852810",
+      "name": "New England Patriots",
+      "home": false,
+      "shortName": "Patriots"
+     }
+    ],
+    "displayGroups": [
+     {
+      "description": "Game Lines",
+      "markets": [
+       {
+        "id": "496075087",
+        "descriptionKey": "Head To Head",
+        "description": "Moneyline",
+        "key": "2W-12",
+        "marketTypeId": "11",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "119",
+         "description": "Game",
+         "abbreviation": "G",
+         "live": false,
+         "main": true
+        },
+        "availableSGP": true,
+        "outcomes": [
+         {
+          "id": "2290781932",
+          "description": "New England Patriots",
+          "status": "O",
+          "type": "A",
+          "competitorId": "25568702-11852810",
+          "price": {
+           "id": "38479072303",
+           "american": "+160",
+           "decimal": "2.600",
+           "fractional": "8/5"
+          }
+         },
+         {
+          "id": "2290781933",
+          "description": "Seattle Seahawks",
+          "status": "O",
+          "type": "H",
+          "competitorId": "25568702-11904231",
+          "price": {
+           "id": "38479072302",
+           "american": "-185",
+           "decimal": "1.540541",
+           "fractional": "20/37"
+          }
+         }
+        ]
+       },
+       {
+        "id": "496075082",
+        "descriptionKey": "Main Dynamic Asian Handicap",
+        "description": "Point Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "120718",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "119",
+         "description": "Game",
+         "abbreviation": "G",
+         "live": false,
+         "main": true
+        },
+        "availableSGP": true,
+        "outcomes": [
+         {
+          "id": "2290781944",
+          "description": "New England Patriots",
+          "status": "O",
+          "type": "A",
+          "competitorId": "25568702-11852810",
+          "price": {
+           "id": "38347449426",
+           "handicap": "3.5",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         },
+         {
+          "id": "2290781945",
+          "description": "Seattle Seahawks",
+          "status": "O",
+          "type": "H",
+          "competitorId": "25568702-11904231",
+          "price": {
+           "id": "38347449427",
+           "handicap": "-3.5",
+           "american": "-110",
+           "decimal": "1.909091",
+           "fractional": "10/11"
+          }
+         }
+        ]
+       },
+       {
+        "id": "496075081",
+        "descriptionKey": "Main Dynamic Over/Under",
+        "description": "Total",
+        "key": "2W-OU",
+        "marketTypeId": "120717",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "119",
+         "description": "Game",
+         "abbreviation": "G",
+         "live": false,
+         "main": true
+        },
+        "availableSGP": true,
+        "outcomes": [
+         {
+          "id": "2290781938",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "38326954446",
+           "handicap": "44.0",
+           "american": "-115",
+           "decimal": "1.870",
+           "fractional": "20/23"
+          }
+         },
+         {
+          "id": "2290781939",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "38326954447",
+           "handicap": "44.0",
+           "american": "-105",
+           "decimal": "1.952381",
+           "fractional": "20/21"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "25410724",
+    "description": "San Francisco 49ers @ Los Angeles Rams",
+    "startTime": 1789086900000,
+    "live": false,
+    "type": "GAMEEVENT",
+    "sport": "FOOT",
+    "competitors": [
+     {
+      "id": "25410724-11904226",
+      "name": "Los Angeles Rams",
+      "home": true,
+      "shortName": "Rams"
+     },
+     {
+      "id": "25410724-11904233",
+      "name": "San Francisco 49ers",
+      "home": false,
+      "shortName": "49ers"
+     }
+    ],
+    "displayGroups": [
+     {
+      "description": "Game Lines",
+      "markets": [
+       {
+        "id": "495183165",
+        "descriptionKey": "Head To Head",
+        "description": "Moneyline",
+        "key": "2W-12",
+        "marketTypeId": "11",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "119",
+         "description": "Game",
+         "abbreviation": "G",
+         "live": false,
+         "main": true
+        },
+        "availableSGP": true,
+        "outcomes": [
+         {
+          "id": "2287405837",
+          "description": "San Francisco 49ers",
+          "status": "O",
+          "type": "A",
+          "competitorId": "25410724-11904233",
+          "price": {
+           "id": "38515306971",
+           "american": "+170",
+           "decimal": "2.700",
+           "fractional": "17/10"
+          }
+         },
+         {
+          "id": "2287406679",
+          "description": "Los Angeles Rams",
+          "status": "O",
+          "type": "H",
+          "competitorId": "25410724-11904226",
+          "price": {
+           "id": "38515306970",
+           "american": "-200",
+           "decimal": "1.500",
+           "fractional": "1/2"
+          }
+         }
+        ]
+       },
+       {
+        "id": "495183166",
+        "descriptionKey": "Main Dynamic Asian Handicap",
+        "description": "Point Spread",
+        "key": "2W-HCAP",
+        "marketTypeId": "120718",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "119",
+         "description": "Game",
+         "abbreviation": "G",
+         "live": false,
+         "main": true
+        },
+        "availableSGP": true,
+        "outcomes": [
+         {
+          "id": "2287405843",
+          "description": "San Francisco 49ers",
+          "status": "O",
+          "type": "A",
+          "competitorId": "25410724-11904233",
+          "price": {
+           "id": "38520466484",
+           "handicap": "3.5",
+           "american": "-105",
+           "decimal": "1.952381",
+           "fractional": "20/21"
+          }
+         },
+         {
+          "id": "2287406685",
+          "description": "Los Angeles Rams",
+          "status": "O",
+          "type": "H",
+          "competitorId": "25410724-11904226",
+          "price": {
+           "id": "38520466483",
+           "handicap": "-3.5",
+           "american": "-115",
+           "decimal": "1.870",
+           "fractional": "20/23"
+          }
+         }
+        ]
+       },
+       {
+        "id": "495183164",
+        "descriptionKey": "Main Dynamic Over/Under",
+        "description": "Total",
+        "key": "2W-OU",
+        "marketTypeId": "120717",
+        "status": "O",
+        "singleOnly": false,
+        "notes": "",
+        "period": {
+         "id": "119",
+         "description": "Game",
+         "abbreviation": "G",
+         "live": false,
+         "main": true
+        },
+        "availableSGP": true,
+        "outcomes": [
+         {
+          "id": "2287405840",
+          "description": "Over",
+          "status": "O",
+          "type": "O",
+          "price": {
+           "id": "38515306995",
+           "handicap": "48.0",
+           "american": "-115",
+           "decimal": "1.870",
+           "fractional": "20/23"
+          }
+         },
+         {
+          "id": "2287406682",
+          "description": "Under",
+          "status": "O",
+          "type": "U",
+          "price": {
+           "id": "38515306994",
+           "handicap": "48.0",
+           "american": "-105",
+           "decimal": "1.952381",
+           "fractional": "20/21"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

@@ -107,6 +107,11 @@ Reseeding upserts; the Elo model reads game scores and ignores priors.
   (default 25) pauses collection once remaining credits drop below it — one
   probe per day checks for the monthly reset — and posts a single Discord
   alert per dip when `BETANALYSIS_DISCORD_WEBHOOK` is set.
+- `books.enabled` polls Bovada and DraftKings directly (free, hourly by
+  default) and attaches their moneyline/spread/total snapshots to games The
+  Odds API already collected, so intraday line movement doesn't need a paid
+  tier. Both are unofficial endpoints and fail open when they change;
+  `game_odds.source` records where each snapshot came from.
 - Each `analysis.models` entry can override `warmup_games` (short seasons)
   and pick `strategy: winner` — back the likely winner whenever the blend
   clears `min_win_prob`, flat-staked — instead of the default EV hunt. The
