@@ -12,6 +12,7 @@ import (
 	"github.com/austinbyron/betanalysis/internal/api"
 	"github.com/austinbyron/betanalysis/internal/config"
 	"github.com/austinbyron/betanalysis/internal/consensus"
+	"github.com/austinbyron/betanalysis/internal/contenders"
 	"github.com/austinbyron/betanalysis/internal/espn"
 	"github.com/austinbyron/betanalysis/internal/mlb"
 	"github.com/austinbyron/betanalysis/internal/priors"
@@ -87,6 +88,11 @@ func main() {
 					&cli.StringFlag{
 						Name:  "model",
 						Usage: "Model type (thompson, epsilon_greedy, historical)",
+					},
+					&cli.StringFlag{
+						Name: "contender",
+						Usage: "Replay a configured analysis.models entry by name with its " +
+							"strategy and home_field adjuster (mlb_pitcher is skipped: records-only replay)",
 					},
 					&cli.IntFlag{
 						Name:  "days",
@@ -315,9 +321,21 @@ func runBacktest(c *cli.Context) error {
 	end := time.Now().UTC()
 	start := end.AddDate(0, 0, -c.Int("days"))
 
-	result, err := analysis.RunBacktest(db, analysisCfg, cfg.Trading, c.String("sport"), start, end, c.Float64("bankroll"))
-	if err != nil {
-		return err
+	var result *analysis.BacktestResult
+	if name := c.String("contender"); name != "" {
+		build, err := contenderBacktestBuilder(cfg, name)
+		if err != nil {
+			return err
+		}
+		result, err = analysis.RunSelectorBacktest(db, build, cfg.Trading, c.String("sport"), start, end, c.Float64("bankroll"))
+		if err != nil {
+			return err
+		}
+	} else {
+		result, err = analysis.RunBacktest(db, analysisCfg, cfg.Trading, c.String("sport"), start, end, c.Float64("bankroll"))
+		if err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("Model:          %s\n", result.ModelType)
@@ -331,6 +349,49 @@ func runBacktest(c *cli.Context) error {
 	fmt.Printf("Sharpe:         %.2f\n", result.SharpeRatio)
 
 	return nil
+}
+
+// contenderBacktestBuilder replays one configured contender on the
+// backtest's records-only stats: same estimator type, strategy, market
+// weight and home_field adjuster as live. mlb_pitcher needs live StatsAPI
+// lookups and is skipped with a note.
+func contenderBacktestBuilder(cfg *config.Config, name string) (analysis.SelectorBuilder, error) {
+	var model *config.ModelConfig
+	for _, m := range cfg.Contenders() {
+		if m.Name == name {
+			mc := m
+			model = &mc
+			break
+		}
+	}
+	if model == nil {
+		return nil, fmt.Errorf("no contender %q in analysis.models", name)
+	}
+	return func(stats analysis.StatsProvider) (*analysis.Selector, error) {
+		analysisCfg := cfg.Analysis
+		analysisCfg.ModelType = model.ModelType
+		estimator, err := analysis.NewEstimator(analysisCfg, stats, nil)
+		if err != nil {
+			return nil, err
+		}
+		for _, adj := range model.Adjusters {
+			switch adj {
+			case "home_field":
+				estimator = analysis.WithAdjusters(estimator, analysis.NewHomeFieldAdjuster(contenders.HomeFieldShift(cfg)))
+			default:
+				fmt.Printf("note: adjuster %q skipped in backtest (records-only replay)\n", adj)
+			}
+		}
+		mw := cfg.Analysis.MarketWeight
+		if model.MarketWeight != nil {
+			mw = *model.MarketWeight
+		}
+		selector := analysis.NewSelector(estimator, model.Name, mw, cfg.Trading.MinOdds, cfg.Trading.MinExpectedValue)
+		if err := contenders.ApplyStrategy(selector, *model); err != nil {
+			return nil, err
+		}
+		return selector, nil
+	}, nil
 }
 
 func runSettle(c *cli.Context) error {

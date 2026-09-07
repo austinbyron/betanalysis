@@ -9,7 +9,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/config"
 	"github.com/austinbyron/betanalysis/internal/contenders"
 	"github.com/austinbyron/betanalysis/pkg/types"
@@ -25,10 +24,13 @@ type ModelPick struct {
 	Bookmaker string
 }
 
-// GamePicks collects every contender's pick for one game
+// GamePicks collects every contender's pick for one game. Total is the
+// number of contenders eligible to pick it (those covering its sport); 0
+// falls back to Build's lineup-wide total.
 type GamePicks struct {
 	Game  types.Game
 	Picks []ModelPick
+	Total int
 }
 
 // Pick is a game where most of the lineup backs the same side —
@@ -69,11 +71,15 @@ func Build(games map[string]GamePicks, total int, minEV float64) []Pick {
 			continue
 		}
 
+		eligible := total
+		if gp.Total > 0 {
+			eligible = gp.Total
+		}
 		cp := Pick{
 			Game:      gp.Game,
 			Selection: side,
 			Votes:     len(agreeing),
-			Total:     total,
+			Total:     eligible,
 			MinEV:     agreeing[0].EV,
 			Picks:     agreeing,
 		}
@@ -89,7 +95,7 @@ func Build(games map[string]GamePicks, total int, minEV float64) []Pick {
 			}
 		}
 		cp.AvgProb = probSum / float64(len(agreeing))
-		cp.Strong = cp.Votes == total && cp.MinEV >= minEV
+		cp.Strong = cp.Votes == eligible && cp.MinEV >= minEV
 		out = append(out, cp)
 	}
 
@@ -134,6 +140,12 @@ func Compute(store Store, lineup []contenders.Contender, cfg *config.Config) []P
 		if len(games) > maxGamesPerSport {
 			games = games[:maxGamesPerSport]
 		}
+		eligible := 0
+		for _, c := range lineup {
+			if c.CoversSport(sport) {
+				eligible++
+			}
+		}
 		for _, game := range games {
 			odds, err := store.GetOddsForGame(game.ID)
 			if err != nil || len(odds) == 0 {
@@ -147,13 +159,13 @@ func Compute(store Store, lineup []contenders.Contender, cfg *config.Config) []P
 				if bet == nil {
 					continue
 				}
-				stake := analysis.KellyStake(bet.Probability, bet.Odds, bankrolls[c.Name],
-					cfg.Trading.KellyFraction, cfg.Trading.MaxStakeFraction)
+				stake := c.Selector.Stake(bet, bankrolls[c.Name], cfg.Trading)
 				if stake < cfg.Trading.MinStake {
 					continue
 				}
 				gp := picks[game.ID]
 				gp.Game = game
+				gp.Total = eligible
 				gp.Picks = append(gp.Picks, ModelPick{
 					Model:     c.Name,
 					Selection: bet.Selection,

@@ -66,7 +66,17 @@ type AnalysisConfig struct {
 	// into fake edges. 0 disables.
 	WarmupGames int           `mapstructure:"warmup_games"`
 	Models      []ModelConfig `mapstructure:"models"`
+	// HomeFieldShift is the probability added to the home side by the
+	// home_field adjuster. 0 means the default (DefaultHomeFieldShift).
+	HomeFieldShift float64 `mapstructure:"home_field_shift"`
 }
+
+// Winner-strategy defaults, applied when a model leaves the override unset
+const (
+	DefaultMinWinProb     = 0.55
+	DefaultStakeFraction  = 0.02
+	DefaultHomeFieldShift = 0.03
+)
 
 // ModelConfig defines one contender in the model race: an estimator plus its
 // adjuster stack, portfolio, and optional overrides.
@@ -77,6 +87,12 @@ type ModelConfig struct {
 	Portfolio    string   `mapstructure:"portfolio"`
 	MarketWeight *float64 `mapstructure:"market_weight"`
 	Sports       []string `mapstructure:"sports"`
+	// Strategy is the selection rule: "ev" (default) bets edge against the
+	// market, "winner" backs the likely winner whenever the blend clears
+	// MinWinProb, staked at StakeFraction of the bankroll.
+	Strategy      string   `mapstructure:"strategy"`
+	MinWinProb    *float64 `mapstructure:"min_win_prob"`
+	StakeFraction *float64 `mapstructure:"stake_fraction"`
 }
 
 // Contenders returns the configured model race lineup. With no models list

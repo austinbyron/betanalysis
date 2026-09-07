@@ -322,7 +322,20 @@ type Selector struct {
 	marketWeight float64 // weight given to the de-vigged market probability
 	minOdds      float64
 	minEV        float64
+
+	// strategy picks the selection rule: StrategyEV hunts for edge against
+	// the market (Kelly-sized); StrategyWinner backs the likely winner
+	// whenever the blend clears minWinProb, staked flat — win rate over EV.
+	strategy      string
+	minWinProb    float64
+	stakeFraction float64
 }
+
+// Selection strategies
+const (
+	StrategyEV     = "ev"
+	StrategyWinner = "winner"
+)
 
 // NewSelector creates a bet selector for an estimator. modelID names the
 // contender for bet attribution; empty falls back to the estimator name.
@@ -336,7 +349,41 @@ func NewSelector(estimator Estimator, modelID string, marketWeight, minOdds, min
 		marketWeight: clamp(marketWeight, 0, 1),
 		minOdds:      minOdds,
 		minEV:        minEV,
+		strategy:     StrategyEV,
 	}
+}
+
+// WithWinnerStrategy switches the selector to back the side the blend
+// favors whenever its probability reaches minWinProb, ignoring the EV and
+// minimum-odds gates, with stakes at stakeFraction of the bankroll.
+func (s *Selector) WithWinnerStrategy(minWinProb, stakeFraction float64) *Selector {
+	s.strategy = StrategyWinner
+	s.minWinProb = clamp(minWinProb, 0, 1)
+	s.stakeFraction = clamp(stakeFraction, 0, 1)
+	return s
+}
+
+// Strategy reports the selection rule in force
+func (s *Selector) Strategy() string { return s.strategy }
+
+// Stake sizes a recommended bet for the strategy: fractional Kelly for the
+// EV strategy (zero when there is no edge), a flat bankroll fraction for
+// the winner strategy — a fairly priced favorite has no Kelly edge but is
+// exactly what that strategy exists to bet. Both honor max_stake_fraction.
+func (s *Selector) Stake(bet *types.Bet, bankroll float64, cfg config.TradingConfig) float64 {
+	if s.strategy != StrategyWinner {
+		return KellyStake(bet.Probability, bet.Odds, bankroll, cfg.KellyFraction, cfg.MaxStakeFraction)
+	}
+	if bankroll <= 0 {
+		return 0
+	}
+	stake := bankroll * s.stakeFraction
+	if cfg.MaxStakeFraction > 0 {
+		if maxStake := bankroll * cfg.MaxStakeFraction; stake > maxStake {
+			stake = maxStake
+		}
+	}
+	return stake
 }
 
 // RecommendBet returns the highest-EV moneyline bet across bookmakers that
@@ -415,9 +462,12 @@ func (s *Selector) MarketWeight() float64 { return s.marketWeight }
 // Thresholds exposes the bet gates for display math
 func (s *Selector) Thresholds() (minOdds, minEV float64) { return s.minOdds, s.minEV }
 
-// bestBet returns the highest-EV moneyline bet across bookmakers for one
-// market blend weight, or nil when nothing clears the thresholds.
+// bestBet returns the bet the strategy recommends across bookmakers for one
+// market blend weight, or nil when nothing clears its gates.
 func (s *Selector) bestBet(game types.Game, odds []types.GameOdds, modelHome, modelAway, modelWeight float64) *types.Bet {
+	if s.strategy == StrategyWinner {
+		return s.winnerBet(game, odds, modelHome, modelAway, modelWeight)
+	}
 	bestEV := s.minEV
 	var bestBet *types.Bet
 
@@ -462,6 +512,67 @@ func (s *Selector) bestBet(game types.Game, odds []types.GameOdds, modelHome, mo
 	}
 
 	return bestBet
+}
+
+// winnerBet backs the side the blend favors at the best price any book
+// offers for it, provided the probability reaches minWinProb. EV is still
+// computed for display; it plays no part in the decision.
+func (s *Selector) winnerBet(game types.Game, odds []types.GameOdds, modelHome, modelAway, modelWeight float64) *types.Bet {
+	var best *types.Bet
+	for _, o := range odds {
+		if o.MarketType != types.MarketMoneyline || o.HomeOdds == nil || o.AwayOdds == nil {
+			continue
+		}
+		marketHome, marketAway := Devig(*o.HomeOdds, *o.AwayOdds)
+		pHome := (1-modelWeight)*marketHome + modelWeight*modelHome
+		pAway := (1-modelWeight)*marketAway + modelWeight*modelAway
+
+		selection, prob, price := types.OutcomeHome, pHome, *o.HomeOdds
+		if pAway > pHome {
+			selection, prob, price = types.OutcomeAway, pAway, *o.AwayOdds
+		}
+		if prob < s.minWinProb {
+			continue
+		}
+		// Best price for the favored side; on a tie keep the higher probability
+		if best != nil && (price < best.Odds || (price == best.Odds && prob <= best.Probability)) {
+			continue
+		}
+		best = &types.Bet{
+			GameID:        game.ID,
+			Selection:     selection,
+			MarketType:    types.MarketMoneyline,
+			Odds:          price,
+			ExpectedValue: ExpectedValue(prob, price),
+			Probability:   prob,
+			ModelID:       s.modelID,
+			Bookmaker:     o.Bookmaker,
+			Status:        types.BetStatusPending,
+		}
+	}
+	return best
+}
+
+// HomeFieldAdjuster shifts probability toward the home side by a fixed
+// amount. Record-based estimators are blind to venue, so without it every
+// away team looks a few points better than the market prices it — the
+// away-underdog lean seen in the live race.
+type HomeFieldAdjuster struct {
+	shift float64
+}
+
+// NewHomeFieldAdjuster creates an adjuster adding shift to the home probability
+func NewHomeFieldAdjuster(shift float64) *HomeFieldAdjuster {
+	return &HomeFieldAdjuster{shift: shift}
+}
+
+// Name implements GameAdjuster
+func (h *HomeFieldAdjuster) Name() string { return "home_field" }
+
+// Adjust implements GameAdjuster
+func (h *HomeFieldAdjuster) Adjust(_ types.Game, homeProb, awayProb float64) (float64, float64) {
+	home := clamp(homeProb+h.shift, 0.01, 0.99)
+	return normalizePair(home, 1-home)
 }
 
 // Devig removes the bookmaker overround from a two-way market by normalizing

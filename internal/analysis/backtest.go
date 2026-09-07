@@ -65,13 +65,29 @@ func (r *replayStats) record(game types.Game) {
 // trading, and settles against the actual result.
 func RunBacktest(store BacktestStore, analysisCfg config.AnalysisConfig, tradingCfg config.TradingConfig,
 	sportKey string, start, end time.Time, bankroll float64) (*BacktestResult, error) {
+	return RunSelectorBacktest(store, func(stats StatsProvider) (*Selector, error) {
+		estimator, err := NewEstimator(analysisCfg, stats, nil)
+		if err != nil {
+			return nil, err
+		}
+		return NewSelector(estimator, "", analysisCfg.MarketWeight, tradingCfg.MinOdds, tradingCfg.MinExpectedValue), nil
+	}, tradingCfg, sportKey, start, end, bankroll)
+}
+
+// SelectorBuilder constructs the selector under test on top of the replay
+// stats provider, so callers can add adjusters or a selection strategy.
+type SelectorBuilder func(stats StatsProvider) (*Selector, error)
+
+// RunSelectorBacktest is RunBacktest for an arbitrary selector: stakes are
+// sized by the selector's own strategy (Kelly or flat), exactly as live.
+func RunSelectorBacktest(store BacktestStore, build SelectorBuilder, tradingCfg config.TradingConfig,
+	sportKey string, start, end time.Time, bankroll float64) (*BacktestResult, error) {
 
 	stats := newReplayStats()
-	estimator, err := NewEstimator(analysisCfg, stats, nil)
+	selector, err := build(stats)
 	if err != nil {
 		return nil, err
 	}
-	selector := NewSelector(estimator, "", analysisCfg.MarketWeight, tradingCfg.MinOdds, tradingCfg.MinExpectedValue)
 
 	games, err := store.GetFinishedGames(sportKey, start, end)
 	if err != nil {
@@ -81,7 +97,7 @@ func RunBacktest(store BacktestStore, analysisCfg config.AnalysisConfig, trading
 		return nil, fmt.Errorf("no finished games with scores stored for %s in range — run collection for a while first", sportKey)
 	}
 
-	result := BacktestResult{ModelType: estimator.Name()}
+	result := BacktestResult{ModelType: selector.modelID}
 	var returns []float64
 	peak := bankroll
 	maxDrawdown := 0.0
@@ -96,7 +112,7 @@ func RunBacktest(store BacktestStore, analysisCfg config.AnalysisConfig, trading
 
 		bet := selector.RecommendBet(game, odds)
 		if bet != nil {
-			stake := KellyStake(bet.Probability, bet.Odds, bankroll, tradingCfg.KellyFraction, tradingCfg.MaxStakeFraction)
+			stake := selector.Stake(bet, bankroll, tradingCfg)
 			if stake >= tradingCfg.MinStake && stake <= bankroll {
 				won := (bet.Selection == types.OutcomeHome && game.Winner() == game.HomeTeam) ||
 					(bet.Selection == types.OutcomeAway && game.Winner() == game.AwayTeam)

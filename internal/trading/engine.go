@@ -109,11 +109,11 @@ func (e *Engine) RunTradingCycle(sport string) error {
 		}
 
 		// Size the stake with the same probability the EV was computed from.
-		// A Kelly stake below the minimum means the edge is marginal — skip
-		// the bet rather than rounding the stake up.
-		stake := analysis.KellyStake(bet.Probability, bet.Odds, portfolio.Balance, e.config.KellyFraction, e.config.MaxStakeFraction)
+		// A stake below the minimum means the edge is marginal — skip the
+		// bet rather than rounding the stake up.
+		stake := e.selector.Stake(bet, portfolio.Balance, e.config)
 		if stake < e.config.MinStake {
-			log.Debug().Str("game", game.ID).Float64("stake", stake).Msg("Kelly stake below minimum, skipping")
+			log.Debug().Str("game", game.ID).Float64("stake", stake).Msg("Stake below minimum, skipping")
 			continue
 		}
 		if stake > portfolio.Balance {
@@ -164,7 +164,7 @@ func (e *Engine) RunTradingCycle(sport string) error {
 // were real so the stake gate still applies. First write per (model, game)
 // wins; the store ignores repeats, so re-sampling cycles can't rewrite it.
 func (e *Engine) recordPreview(game types.Game, preview *types.Bet, bankroll float64) {
-	stake := analysis.KellyStake(preview.Probability, preview.Odds, bankroll, e.config.KellyFraction, e.config.MaxStakeFraction)
+	stake := e.selector.Stake(preview, bankroll, e.config)
 	if stake < e.config.MinStake {
 		return
 	}

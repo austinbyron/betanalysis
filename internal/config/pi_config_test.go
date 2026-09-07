@@ -43,8 +43,8 @@ func TestPiConfigFallLineup(t *testing.T) {
 	}
 
 	models := cfg.Contenders()
-	if len(models) != 9 {
-		t.Fatalf("contenders = %d, want 9", len(models))
+	if len(models) != 11 {
+		t.Fatalf("contenders = %d, want 11", len(models))
 	}
 	byName := map[string]ModelConfig{}
 	for _, m := range models {
@@ -82,6 +82,39 @@ func TestPiConfigFallLineup(t *testing.T) {
 		}
 		if len(m.Sports) != 1 || m.Sports[0] != "baseball_mlb" {
 			t.Errorf("%s sports = %v, want [baseball_mlb]", name, m.Sports)
+		}
+	}
+}
+
+func TestPiConfigWinnerContenders(t *testing.T) {
+	cfg := loadPiConfig(t)
+	byName := map[string]ModelConfig{}
+	for _, m := range cfg.Contenders() {
+		byName[m.Name] = m
+	}
+	for _, name := range []string{"winner-historical", "winner-elo"} {
+		m, ok := byName[name]
+		if !ok {
+			t.Errorf("missing winner contender %q", name)
+			continue
+		}
+		if m.Strategy != "winner" {
+			t.Errorf("%s strategy = %q, want winner", name, m.Strategy)
+		}
+		if len(m.Sports) != 1 || m.Sports[0] != "baseball_mlb" {
+			t.Errorf("%s sports = %v, want [baseball_mlb]", name, m.Sports)
+		}
+	}
+	// Record-based winner model needs the venue correction; elo has its own
+	if adj := byName["winner-historical"].Adjusters; len(adj) != 2 || adj[1] != "home_field" {
+		t.Errorf("winner-historical adjusters = %v, want [mlb_pitcher home_field]", adj)
+	}
+	for _, m := range cfg.Contenders() {
+		if m.Strategy == "" && m.Name != "winner-historical" && m.Name != "winner-elo" {
+			continue
+		}
+		if m.Strategy != "" && m.Strategy != "winner" {
+			t.Errorf("%s has unexpected strategy %q", m.Name, m.Strategy)
 		}
 	}
 }

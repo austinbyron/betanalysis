@@ -121,3 +121,63 @@ func TestComputeSkipsGamesWithoutOdds(t *testing.T) {
 		t.Errorf("picks = %d, want 0 (no odds)", len(picks))
 	}
 }
+
+func TestComputeCountsOnlyContendersCoveringTheSport(t *testing.T) {
+	// Football contenders in the lineup must not dilute an MLB game's
+	// total: 3/3 MLB agreement is strong, not 3/5.
+	store := &fakeStore{
+		games: []types.Game{{ID: "g1", SportKey: "baseball_mlb", HomeTeam: "H", AwayTeam: "A",
+			Status: "scheduled", CommenceTime: time.Now().UTC().Add(5 * time.Hour)}},
+		odds: map[string][]types.GameOdds{
+			"g1": {{GameID: "g1", Bookmaker: "dk", MarketType: types.MarketMoneyline,
+				HomeOdds: f64(2.4), AwayOdds: f64(2.4), RetrievedAt: time.Now()}},
+		},
+		portfolios: map[string]*types.Portfolio{},
+	}
+	mlb := func(name string) contenders.Contender {
+		c := testContender(name)
+		c.Sports = []string{"baseball_mlb"}
+		return c
+	}
+	nfl := func(name string) contenders.Contender {
+		c := testContender(name)
+		c.Sports = []string{"americanfootball_nfl"}
+		return c
+	}
+	lineup := []contenders.Contender{mlb("a"), mlb("b"), mlb("c"), nfl("x"), nfl("y")}
+
+	picks := Compute(store, lineup, testConfig())
+	if len(picks) != 1 {
+		t.Fatalf("picks = %d, want 1", len(picks))
+	}
+	if p := picks[0]; p.Votes != 3 || p.Total != 3 || !p.Strong {
+		t.Errorf("pick = %+v, want 3/3 strong", p)
+	}
+}
+
+func TestComputeIncludesWinnerContenderPicks(t *testing.T) {
+	// A winner-strategy contender has no Kelly edge on a fair favorite but
+	// its flat stake clears the gate, so its vote counts.
+	store := &fakeStore{
+		games: []types.Game{{ID: "g1", SportKey: "baseball_mlb", HomeTeam: "H", AwayTeam: "A",
+			Status: "scheduled", CommenceTime: time.Now().UTC().Add(5 * time.Hour)}},
+		odds: map[string][]types.GameOdds{
+			"g1": {{GameID: "g1", Bookmaker: "dk", MarketType: types.MarketMoneyline,
+				HomeOdds: f64(1.6), AwayOdds: f64(2.4), RetrievedAt: time.Now()}},
+		},
+		portfolios: map[string]*types.Portfolio{},
+	}
+	winner := func(name string) contenders.Contender {
+		return contenders.Contender{
+			Name: name, Portfolio: name,
+			Selector: analysis.NewSelector(analysis.NewHistorical(fixedStats{}), name, 1, 1.5, 0.05).
+				WithWinnerStrategy(0.55, 0.02), // market-only blend: home ≈ 0.6
+		}
+	}
+	lineup := []contenders.Contender{winner("a"), winner("b"), winner("c")}
+
+	picks := Compute(store, lineup, testConfig())
+	if len(picks) != 1 || picks[0].Votes != 3 || picks[0].Selection != "home" {
+		t.Fatalf("picks = %+v, want one 3/3 home pick", picks)
+	}
+}

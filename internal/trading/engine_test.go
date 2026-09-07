@@ -530,3 +530,28 @@ func TestSettleConsensusPicks(t *testing.T) {
 		t.Errorf("unfinished game's pick must stay pending: %+v", store.consensusPicks[2])
 	}
 }
+
+func TestTradingCycleWinnerStrategyStakesFlat(t *testing.T) {
+	store := newFakeStore()
+	store.games = []types.Game{{ID: "g1", HomeTeam: "Home", AwayTeam: "Away", Status: "scheduled", CommenceTime: time.Now().Add(time.Hour)}}
+	// Fairly priced favorite: Kelly has no edge, the winner strategy bets anyway
+	store.odds["g1"] = []types.GameOdds{
+		{GameID: "g1", Bookmaker: "book", MarketType: types.MarketMoneyline, HomeOdds: f64(1.6), AwayOdds: f64(2.4)},
+	}
+
+	cfg := tradingConfig()
+	// Market-only blend: de-vigged 1.6/2.4 makes home a 60% favorite
+	selector := analysis.NewSelector(analysis.NewHistorical(fixedStats{0, 0}), "", 1, cfg.MinOdds, cfg.MinExpectedValue).
+		WithWinnerStrategy(0.55, 0.02)
+	engine := NewEngine(store, selector, cfg)
+
+	if err := engine.RunTradingCycle("test"); err != nil {
+		t.Fatalf("RunTradingCycle: %v", err)
+	}
+	if len(store.bets) != 1 {
+		t.Fatalf("bets placed = %d, want 1", len(store.bets))
+	}
+	if bet := store.bets[0]; bet.Stake != 20 || bet.Selection != types.OutcomeHome {
+		t.Errorf("bet = %+v, want home at flat 2%% of 1000", bet)
+	}
+}

@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/austinbyron/betanalysis/internal/analysis"
 	"github.com/austinbyron/betanalysis/internal/config"
+	"github.com/austinbyron/betanalysis/pkg/types"
 )
 
 type fakeStats struct{}
@@ -76,5 +78,42 @@ func TestCoversSportFilter(t *testing.T) {
 	c := Contender{Sports: []string{"americanfootball_nfl"}}
 	if c.CoversSport("baseball_mlb") || !c.CoversSport("americanfootball_nfl") {
 		t.Error("sports filter not honored")
+	}
+}
+
+func TestBuildWiresWinnerStrategy(t *testing.T) {
+	cfg := raceConfig(
+		config.ModelConfig{Name: "winner-historical", ModelType: "historical", Strategy: "winner", Adjusters: []string{"home_field"}},
+		config.ModelConfig{Name: "ev-historical", ModelType: "historical"},
+	)
+	cs, err := Build(cfg, fakeStats{}, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := cs[0].Selector.Strategy(); got != analysis.StrategyWinner {
+		t.Errorf("strategy = %q, want winner", got)
+	}
+	if got := cs[1].Selector.Strategy(); got != analysis.StrategyEV {
+		t.Errorf("default strategy = %q, want ev", got)
+	}
+	// home_field with the default shift moves a 50/50 record toward home
+	v := cs[0].Selector.View(types.Game{HomeTeam: "H", AwayTeam: "A"})
+	if !v.HasAdjusters || v.AdjHome <= v.RawHome {
+		t.Errorf("home_field adjuster not applied: %+v", v)
+	}
+}
+
+func TestBuildRejectsUnknownStrategy(t *testing.T) {
+	cfg := raceConfig(config.ModelConfig{Name: "a", ModelType: "historical", Strategy: "yolo"})
+	if _, err := Build(cfg, fakeStats{}, nil); err == nil || !strings.Contains(err.Error(), "unknown strategy") {
+		t.Fatalf("err = %v, want unknown strategy", err)
+	}
+}
+
+func TestBuildRejectsBadWinnerOverrides(t *testing.T) {
+	bad := 1.5
+	cfg := raceConfig(config.ModelConfig{Name: "a", ModelType: "historical", Strategy: "winner", MinWinProb: &bad})
+	if _, err := Build(cfg, fakeStats{}, nil); err == nil || !strings.Contains(err.Error(), "min_win_prob") {
+		t.Fatalf("err = %v, want min_win_prob complaint", err)
 	}
 }

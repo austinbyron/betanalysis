@@ -53,7 +53,21 @@ analysis:
       model_type: elo
       adjusters: [mlb_pitcher]
       sports: [baseball_mlb]
-    # Fall football races — palette slots 6-9, fresh $1000 portfolios
+    # Winner-strategy contenders (palette slots 6-7): back the likely
+    # winner whenever the blend clears min_win_prob, flat-staked, no EV
+    # gate — win rate over edge. home_field corrects the away lean the
+    # venue-blind record models showed in the live race.
+    - name: winner-historical
+      model_type: historical
+      adjusters: [mlb_pitcher, home_field]
+      strategy: winner
+      sports: [baseball_mlb]
+    - name: winner-elo
+      model_type: elo
+      adjusters: [mlb_pitcher]
+      strategy: winner
+      sports: [baseball_mlb]
+    # Fall football races — palette slots 8-11, fresh $1000 portfolios
     # auto-created on first cycle. No adjusters: mlb_pitcher is MLB-only.
     # NFL priors seeded live 2026-07-08; NCAAF auto-seeds at first restart.
     - name: elo-nfl

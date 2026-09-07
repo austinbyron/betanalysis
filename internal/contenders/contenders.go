@@ -63,6 +63,8 @@ func Build(cfg *config.Config, stats analysis.StatsProvider, games analysis.Game
 					pitcher = mlb.NewPitcherAdjuster(mlb.NewClient())
 				}
 				estimator = analysis.WithAdjusters(estimator, pitcher)
+			case "home_field":
+				estimator = analysis.WithAdjusters(estimator, analysis.NewHomeFieldAdjuster(HomeFieldShift(cfg)))
 			default:
 				return nil, fmt.Errorf("model %q: unknown adjuster %q", m.Name, name)
 			}
@@ -77,12 +79,54 @@ func Build(cfg *config.Config, stats analysis.StatsProvider, games analysis.Game
 			portfolio = m.Name
 		}
 
+		selector := analysis.NewSelector(estimator, m.Name, mw, cfg.Trading.MinOdds, cfg.Trading.MinExpectedValue)
+		if err := ApplyStrategy(selector, m); err != nil {
+			return nil, fmt.Errorf("model %q: %w", m.Name, err)
+		}
+
 		out = append(out, Contender{
 			Name:      m.Name,
 			Portfolio: portfolio,
 			Sports:    m.Sports,
-			Selector:  analysis.NewSelector(estimator, m.Name, mw, cfg.Trading.MinOdds, cfg.Trading.MinExpectedValue),
+			Selector:  selector,
 		})
 	}
 	return out, nil
+}
+
+// HomeFieldShift returns the configured home_field adjuster shift or its default
+func HomeFieldShift(cfg *config.Config) float64 {
+	if cfg.Analysis.HomeFieldShift > 0 {
+		return cfg.Analysis.HomeFieldShift
+	}
+	return config.DefaultHomeFieldShift
+}
+
+// ApplyStrategy configures the selector's selection rule from the model
+// config, filling winner-strategy defaults. Shared with the backtest so a
+// contender replays with the rule it trades live.
+func ApplyStrategy(selector *analysis.Selector, m config.ModelConfig) error {
+	switch m.Strategy {
+	case "", analysis.StrategyEV:
+		return nil
+	case analysis.StrategyWinner:
+		minWin := config.DefaultMinWinProb
+		if m.MinWinProb != nil {
+			minWin = *m.MinWinProb
+		}
+		if minWin < 0.5 || minWin >= 1 {
+			return fmt.Errorf("min_win_prob %v must be in [0.5, 1)", minWin)
+		}
+		frac := config.DefaultStakeFraction
+		if m.StakeFraction != nil {
+			frac = *m.StakeFraction
+		}
+		if frac <= 0 || frac > 1 {
+			return fmt.Errorf("stake_fraction %v must be in (0, 1]", frac)
+		}
+		selector.WithWinnerStrategy(minWin, frac)
+		return nil
+	default:
+		return fmt.Errorf("unknown strategy %q (want ev or winner)", m.Strategy)
+	}
 }

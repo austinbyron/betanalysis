@@ -610,17 +610,20 @@ func TestEquityChartSkipsContenderWithoutBetsKeepingSlots(t *testing.T) {
 	}
 }
 
-func TestDashboardDefinesNinePaletteSlots(t *testing.T) {
+func TestDashboardDefinesElevenPaletteSlots(t *testing.T) {
 	srv := newTestServer(t, &fakeStore{odds: map[string][]types.GameOdds{}})
 	_, body := render(t, srv, "/")
 
-	// Slots 6-9 back the fall football contenders; values are the
-	// dataviz-validated dark-surface palette — see the fall-expansion spec.
+	// Slots 6-7 back the winner-strategy MLB contenders, 8-11 the fall
+	// football contenders; values are the dataviz-validated dark-surface
+	// palette (adjacent pairs pass CVD + normal-vision separation).
 	for _, want := range []string{
 		"--series-6:       #e66767",
 		"--series-7:       #00a3c4",
 		"--series-8:       #d55181",
 		"--series-9:       #d95926",
+		"--series-10:      #c04fd1",
+		"--series-11:      #7fa000",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard palette missing %q", want)
