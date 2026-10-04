@@ -142,3 +142,29 @@ func TestBuildAppliesPerModelWarmup(t *testing.T) {
 type recordStats struct{ w, l int }
 
 func (r recordStats) TeamRecord(string, string) (int, int) { return r.w, r.l }
+
+func TestBuildAppliesMaxOdds(t *testing.T) {
+	four := 4.0
+	cfg := raceConfig(
+		config.ModelConfig{Name: "capped", ModelType: "historical", MaxOdds: &four},
+		config.ModelConfig{Name: "open", ModelType: "historical"},
+	)
+	cs, err := Build(cfg, fakeStats{}, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := cs[0].Selector.MaxOdds(); got != 4.0 {
+		t.Errorf("max odds = %v, want 4", got)
+	}
+	if got := cs[1].Selector.MaxOdds(); got != 0 {
+		t.Errorf("unset max odds = %v, want 0 (no cap)", got)
+	}
+}
+
+func TestBuildRejectsBadMaxOdds(t *testing.T) {
+	bad := 1.0
+	cfg := raceConfig(config.ModelConfig{Name: "a", ModelType: "historical", MaxOdds: &bad})
+	if _, err := Build(cfg, fakeStats{}, nil); err == nil || !strings.Contains(err.Error(), "max_odds") {
+		t.Fatalf("err = %v, want max_odds complaint", err)
+	}
+}

@@ -109,6 +109,12 @@ func HomeFieldShift(cfg *config.Config) float64 {
 // config, filling winner-strategy defaults. Shared with the backtest so a
 // contender replays with the rule it trades live.
 func ApplyStrategy(selector *analysis.Selector, m config.ModelConfig) error {
+	if m.MaxOdds != nil {
+		if *m.MaxOdds <= 1 {
+			return fmt.Errorf("max_odds %v must be above 1", *m.MaxOdds)
+		}
+		selector.WithMaxOdds(*m.MaxOdds)
+	}
 	switch m.Strategy {
 	case "", analysis.StrategyEV:
 		return nil

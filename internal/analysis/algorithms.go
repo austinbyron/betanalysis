@@ -325,6 +325,7 @@ type Selector struct {
 	modelID      string  // contender name stamped on recommended bets
 	marketWeight float64 // weight given to the de-vigged market probability
 	minOdds      float64
+	maxOdds      float64 // 0 = no cap
 	minEV        float64
 
 	// strategy picks the selection rule: StrategyEV hunts for edge against
@@ -366,6 +367,16 @@ func (s *Selector) WithWinnerStrategy(minWinProb, stakeFraction float64) *Select
 	s.stakeFraction = clamp(stakeFraction, 0, 1)
 	return s
 }
+
+// WithMaxOdds makes the EV strategy skip prices above maxOdds; 0 disables
+// the cap. The winner strategy backs favorites and ignores it.
+func (s *Selector) WithMaxOdds(maxOdds float64) *Selector {
+	s.maxOdds = maxOdds
+	return s
+}
+
+// MaxOdds reports the EV strategy's price cap (0 = none)
+func (s *Selector) MaxOdds() float64 { return s.maxOdds }
 
 // Strategy reports the selection rule in force
 func (s *Selector) Strategy() string { return s.strategy }
@@ -494,7 +505,7 @@ func (s *Selector) bestBet(game types.Game, odds []types.GameOdds, modelHome, mo
 		}
 
 		for _, c := range candidates {
-			if c.odds < s.minOdds {
+			if c.odds < s.minOdds || (s.maxOdds > 0 && c.odds > s.maxOdds) {
 				continue
 			}
 			ev := ExpectedValue(c.prob, c.odds)

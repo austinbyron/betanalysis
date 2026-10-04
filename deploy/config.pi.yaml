@@ -81,14 +81,19 @@ analysis:
       model_type: thompson
       sports: [americanfootball_nfl]
       warmup_games: 6
+    # max_odds 4.0 (2026-10-03): the first month lost ~$1,285 on prices above
+    # 4.0 and was slightly up below it — thin college records make every
+    # big underdog look like value.
     - name: elo-ncaaf
       model_type: elo
       sports: [americanfootball_ncaaf]
       warmup_games: 6
+      max_odds: 4.0
     - name: thompson-ncaaf
       model_type: thompson
       sports: [americanfootball_ncaaf]
       warmup_games: 6
+      max_odds: 4.0
     # Football favorites win ~2/3 of the time against the sharpest lines in
     # sports — the winner strategy fits football better than EV hunting.
     - name: winner-nfl

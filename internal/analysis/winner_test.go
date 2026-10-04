@@ -144,3 +144,24 @@ func TestHomeFieldAdjusterShiftsTowardHome(t *testing.T) {
 		t.Errorf("adjusted home prob = %.3f, want 0.530", h)
 	}
 }
+
+func TestMaxOddsSkipsLongshots(t *testing.T) {
+	// A wildly optimistic record on the away dog makes 9.0 look like a huge
+	// edge — the cap must pass on it rather than chase the longshot.
+	stats := fakeStats{"Home": {2, 18}, "Away": {18, 2}}
+	game := types.Game{ID: "g1", HomeTeam: "Home", AwayTeam: "Away"}
+	odds := []types.GameOdds{moneyline("book_a", 1.08, 9.00)}
+
+	uncapped := NewSelector(NewHistorical(stats), "", 0.7, 1.5, 0.05)
+	if bet := uncapped.RecommendBet(game, odds); bet == nil || bet.Odds != 9.00 {
+		t.Fatalf("uncapped selector should take the longshot, got %+v", bet)
+	}
+	capped := NewSelector(NewHistorical(stats), "", 0.7, 1.5, 0.05).WithMaxOdds(4.0)
+	if bet := capped.RecommendBet(game, odds); bet != nil {
+		t.Errorf("odds above max_odds must be skipped, got %+v", bet)
+	}
+	// At or under the cap the bet still goes through
+	if bet := capped.RecommendBet(game, []types.GameOdds{moneyline("book_a", 1.30, 4.00)}); bet == nil || bet.Odds != 4.00 {
+		t.Errorf("odds at max_odds should be allowed, got %+v", bet)
+	}
+}

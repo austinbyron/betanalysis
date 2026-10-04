@@ -100,6 +100,10 @@ type ModelConfig struct {
 	// WarmupGames overrides analysis.warmup_games for this contender —
 	// a 17-game football season never reaches the MLB-sized default.
 	WarmupGames *int `mapstructure:"warmup_games"`
+	// MaxOdds skips EV bets priced above it — sparse-record models read
+	// big underdogs as edges (NCAAF elo/thompson lost almost all their money
+	// above 4.0). Unset means no cap.
+	MaxOdds *float64 `mapstructure:"max_odds"`
 }
 
 // Contenders returns the configured model race lineup. With no models list
